@@ -9,12 +9,14 @@ new GitHub repo and available as a ZIP download. Users authenticate via GitHub O
 and bring their own LLM API keys (Gemini, Groq, OpenRouter).
 
 ## Tech stack — never suggest alternatives to these
-Backend:    FastAPI + Python 3.11 + SQLAlchemy + SQLite + alembic
+Backend:    FastAPI + Python 3.11 + Appwrite (BaaS) — no SQLAlchemy, no SQLite, no alembic
 Agents:     LangGraph (StateGraph) — 7 nodes, strict topology
 LLM:        openai SDK (unified — works with Gemini, Groq, OpenRouter)
-Auth:       GitHub OAuth 2.0 + JWT in httpOnly cookies (hf_session)
-Encryption: cryptography.fernet for GitHub tokens and user API keys
-Real-time:  sse-starlette (Server-Sent Events — NOT WebSockets)
+Auth:       Appwrite OAuth2 (GitHub provider) — session cookie set by Appwrite SDK on frontend
+            Backend validates sessions via Appwrite Account.get() using the session cookie
+Encryption: cryptography.fernet for user LLM API keys stored in Appwrite
+Real-time:  Appwrite Realtime (WebSocket) — frontend subscribes to job-events collection directly
+            NOT sse-starlette; stream.py router is a stub (kept for potential future use)
 Vectors:    chromadb (local, in-process) + sentence-transformers (local, CPU)
 Frontend:   React 18 + Vite + Tailwind CSS + Framer Motion + Zustand + React Router
 Icons:      lucide-react only
@@ -80,21 +82,32 @@ hackfarmer/
     store/useAppStore.js    Zustand global store
     lib/api.js              Fetch wrapper with credentials:include
 
-## Database models — exact field names, never invent new ones
-User:           id, github_id, username, avatar_url, encrypted_gh_token,
-                created_at, last_login
-UserApiKey:     id, user_id(FK), provider, encrypted_key, is_valid, last_used
-Job:            id, user_id(FK), status, input_type, repo_name, repo_private,
-                github_url, zip_path, retention_days, error_message,
-                created_at, completed_at
-AgentRun:       id, job_id(FK), agent_name, status, retry_count,
-                started_at, completed_at, output_summary
-GeneratedFile:  id, job_id(FK), file_path, agent_name, size_bytes
-JobEvent:       id, job_id(FK), event_type, payload(JSON string), created_at
+## Database — Appwrite collections (database ID: hackfarmer-db)
+All documents use Appwrite's camelCase field naming convention.
+jobs:           $id, userId, status, inputType, repoName, repoPrivate,
+                githubUrl, zipPath, retentionDays, errorMessage,
+                $createdAt, completedAt
+agent-runs:     $id, jobId, agentName, status, retryCount,
+                startedAt, completedAt
+user-api-keys:  $id, userId, provider, encryptedKey, isValid, lastUsed
+job-events:     $id, jobId, eventType, payload(JSON string), $createdAt
+
+## REST API response field names (snake_case — converted from Appwrite camelCase)
+jobs API returns: id, status, input_type, repo_name, repo_private,
+                  github_url, zip_path, error_message, created_at, completed_at
+agent-runs API:   id, agent_name, status, retry_count, started_at, completed_at, output_summary
 
 Job.status enum:      queued / running / complete / partial / failed
 AgentRun.status enum: waiting / running / done / failed
 UserApiKey.provider:  gemini / groq / openrouter
+
+## Auth — Appwrite-based
+- Frontend: use `account.createOAuth2Session(OAuthProvider.Github, ...)` to sign in
+- Frontend session check: `account.get()` on mount (useAuth.js)
+- Frontend logout: `account.deleteSession('current')`
+- Backend: `get_current_user` dependency reads the Appwrite session cookie (`a_session_*`)
+  and calls `Account.get()` via a per-request Appwrite client (build_session_client)
+- auth.py router is a stub — GitHub OAuth endpoints and JWT are NOT used
 
 ## ProjectState fields — exact names, never add or rename
 job_id, user_id, llm (LLMRouter instance),
@@ -107,15 +120,15 @@ readme_content, pitch_slides, architecture_mermaid,
 validation_score, validation_issues,
 retry_count, errors, status, github_url
 
-## SSE event schema — always exactly this shape
+## Realtime event schema — always exactly this shape (written to Appwrite job-events collection)
 {
-  "type": "agent_start|agent_thinking|agent_done|agent_failed|
-           job_complete|job_failed|job_queued|heartbeat",
-  "payload": { ... },
-  "job_id": "uuid-string",
-  "timestamp": "ISO8601"
+  "eventType": "agent_start|agent_thinking|agent_done|agent_failed|
+                job_complete|job_failed|job_queued|heartbeat",
+  "payload": "JSON string",
+  "jobId": "appwrite-document-id"
 }
-Every SSE event is ALSO written to the JobEvent table immediately.
+Frontend subscribes to: databases.{DB_ID}.collections.job-events.documents (Appwrite Realtime)
+Every event is written by backend publish() in src/core/events.py — also syncs agent-runs.
 
 ## Agent graph topology — fixed, never change
 analyst → architect → [frontend_agent + backend_agent + business_agent] (parallel)
@@ -129,9 +142,9 @@ analyst → architect → [frontend_agent + backend_agent + business_agent] (par
 3.  retry_count checked in graph.py conditional edge only — never inside agent functions
 4.  All LLM calls: await state["llm"].complete() — never call providers directly
 5.  All prompts: src/llm/prompts/{agent_name}.txt — never hardcode in Python
-6.  GitHub tokens + API keys: retrieved from DB in the function that needs them only,
-    never returned in API responses, never logged
-7.  JWT: httpOnly cookie "hf_session" only — never localStorage, never response body
+6.  API keys: retrieved from Appwrite user-api-keys collection, decrypted in the function
+    that needs them only — never returned in API responses, never logged
+7.  Auth: Appwrite session cookie only — never JWT, never localStorage, never response body
 8.  Every agent emits exactly: agent_start → (1+ agent_thinking) → agent_done OR agent_failed
 9.  Background tasks: never use request context — pass user_id and job_id explicitly
 10. LLMRouter is instantiated per-job with that user's decrypted keys — never a global
@@ -174,6 +187,12 @@ ALLOWED:  job completion webhook, file cleanup cron, failed job alert, new user 
 FORBIDDEN: never in the critical agent pipeline path, never awaited by FastAPI
 
 ## Current build phase
-Phase: Phase 2 — Auth & API key management
-Done:  Scaffold complete, config.py, db.py (all 6 models), encryption.py, key_manager.py, auth.py (GitHub OAuth), settings.py (API keys CRUD + test), dependencies.py, main.py, docker-compose.yml, frontend scaffold (Vite + React + Tailwind), all placeholder agents/ingestion/integrations
-Next:  Validate db.py with create_all(), test OAuth flow in browser
+Phase: Phase 2 complete — Auth (Appwrite OAuth) & API key management done
+Done:  config.py, appwrite_client.py, encryption.py, key_manager.py,
+       auth.py (Appwrite session validation), settings.py (API keys CRUD + live test),
+       dependencies.py (get_current_user via Appwrite), main.py, docker-compose.yml,
+       jobs.py (full CRUD + pipeline launcher), events.py (Appwrite pub/sub),
+       queue_manager.py, frontend (Vite + React + Tailwind + Appwrite SDK),
+       all placeholder agents/ingestion/integrations
+Next:  Wire up agent pipeline (graph.py), implement individual agent nodes,
+       test end-to-end job flow

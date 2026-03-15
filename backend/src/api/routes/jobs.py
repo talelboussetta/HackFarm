@@ -171,7 +171,7 @@ async def get_job(
                 "retry_count": r["retryCount"],
                 "started_at": r.get("startedAt"),
                 "completed_at": r.get("completedAt"),
-                "output_summary": r.get("output_summary"), # Wait, missed this in schema? Let me check
+                "output_summary": r.get("outputSummary"),
             }
             for r in agent_runs["documents"]
         ],

@@ -3,9 +3,11 @@ HackFarmer — Phase 3A Validation Script.
 Run: cd backend && python tests/test_phase3a.py
 
 Validates all core components implemented in Phase 3A.
+Uses Appwrite as the backend data store.
 """
 
 import asyncio
+import json
 import sys
 import os
 
@@ -29,17 +31,16 @@ def test(name, fn):
         failed += 1
 
 
-# ── Test 1: DB has all 6 tables ──────────────────────────────
+# ── Test 1: Appwrite has all required collections ────────────
 
-def test_db_tables():
-    from src.store.db import Base, create_all, engine
-    create_all()
-    from sqlalchemy import inspect
-    inspector = inspect(engine)
-    tables = set(inspector.get_table_names())
-    expected = {"users", "user_api_keys", "jobs", "agent_runs", "generated_files", "job_events"}
-    missing = expected - tables
-    assert not missing, f"Missing tables: {missing}"
+def test_appwrite_collections():
+    from src.appwrite_client import databases
+    from src.core.config import settings
+    result = databases.list_collections(settings.APPWRITE_DATABASE_ID)
+    found = {c["$id"] for c in result["collections"]}
+    expected = {"users", "user-api-keys", "jobs", "agent-runs", "job-events"}
+    missing = expected - found
+    assert not missing, f"Missing collections: {missing}"
 
 
 # ── Test 2: Encryption round-trip ────────────────────────────
@@ -83,37 +84,30 @@ def test_llm_router_empty():
         pass  # Expected
 
 
-# ── Test 5: EventBus pub/sub works ───────────────────────────
+# ── Test 5: Appwrite event publish works ─────────────────────
 
-async def test_event_bus():
-    from src.core.events import EventBus
-    bus = EventBus()
-    queue = bus.subscribe("test-job-1")
-    
-    # Use the bus directly but catch DB errors
+def test_event_publish():
+    from src.core.events import publish
+    from src.appwrite_client import databases
+    from src.core.config import settings
+    from appwrite.query import Query
+
+    publish("test-gate-job", "agent_start", {
+        "agent": "analyst", "message": "gate test", "estimated_seconds": 10
+    })
+    result = databases.list_documents(
+        settings.APPWRITE_DATABASE_ID, "job-events",
+        [Query.equal("jobId", "test-gate-job")]
+    )
+    assert result["total"] > 0, "Expected at least one event document in Appwrite"
+
+
+# ── Test 6: publish rejects invalid event types ──────────────
+
+def test_event_invalid_type():
+    from src.core.events import publish
     try:
-        bus.publish("test-job-1", "agent_start", {"agent": "test", "message": "hi", "estimated_seconds": 1})
-    except Exception:
-        pass  # DB might not have the job — that's ok for this test
-
-    # Test in-memory delivery
-    bus2 = EventBus()
-    q = bus2.subscribe("test-job-2")
-    # Manually put an event to simulate
-    q.put_nowait({"type": "agent_start", "payload": {"agent": "test"}, "job_id": "test-job-2", "timestamp": ""})
-    event = q.get_nowait()
-    assert event["type"] == "agent_start"
-    assert event["payload"]["agent"] == "test"
-    bus2.unsubscribe("test-job-2", q)
-
-
-# ── Test 6: EventBus rejects invalid event types ────────────
-
-def test_event_bus_invalid():
-    from src.core.events import EventBus
-    bus = EventBus()
-    try:
-        bus.publish("job-1", "invalid_event_type", {})
+        publish("job-1", "invalid_event_type", {})
         assert False, "Should have raised ValueError"
     except ValueError:
         pass  # Expected
@@ -123,13 +117,8 @@ def test_event_bus_invalid():
 
 def test_can_run_job():
     from src.core.queue_manager import can_run_job
-    from src.store.db import SessionLocal
-    db = SessionLocal()
-    try:
-        result = can_run_job("nonexistent-user-id", db)
-        assert result is True, f"Expected True, got {result}"
-    finally:
-        db.close()
+    result = can_run_job("nonexistent-user-id")
+    assert result is True, f"Expected True, got {result}"
 
 
 # ── Test 8: Graph compiles and pipeline runs ─────────────────
@@ -148,37 +137,40 @@ async def test_graph_compiles():
     assert "requirements.txt" in result["generated_files"]
 
 
-# ── Test 9: Pipeline emits events (JobEvent count > 0) ───────
+# ── Test 9: Pipeline emits events (job-events count > 0) ─────
 
-async def test_pipeline_events():
-    from src.store.db import SessionLocal, JobEvent
-    db = SessionLocal()
-    try:
-        count = db.query(JobEvent).filter(JobEvent.job_id == "graph-test-job").count()
-        assert count > 0, f"Expected events in DB, got {count}"
-    finally:
-        db.close()
+def test_pipeline_events():
+    from src.appwrite_client import databases
+    from src.core.config import settings
+    from appwrite.query import Query
+    result = databases.list_documents(
+        settings.APPWRITE_DATABASE_ID, "job-events",
+        [Query.equal("jobId", "graph-test-job")]
+    )
+    assert result["total"] > 0, f"Expected events in Appwrite, got {result['total']}"
 
 
-# ── Test 10: All 7 agents ran ────────────────────────────────
+# ── Test 10: All 8 agents ran ────────────────────────────────
 
-async def test_all_agents_ran():
-    from src.store.db import SessionLocal, JobEvent
-    db = SessionLocal()
-    try:
-        events = (
-            db.query(JobEvent)
-            .filter(JobEvent.job_id == "graph-test-job", JobEvent.event_type == "agent_start")
-            .all()
-        )
-        import json
-        agent_names = {json.loads(e.payload).get("agent") for e in events}
-        expected = {"analyst", "architect", "frontend_agent", "backend_agent",
-                    "business_agent", "integrator", "validator", "github_agent"}
-        missing = expected - agent_names
-        assert not missing, f"Missing agent events: {missing}"
-    finally:
-        db.close()
+def test_all_agents_ran():
+    from src.appwrite_client import databases
+    from src.core.config import settings
+    from appwrite.query import Query
+    result = databases.list_documents(
+        settings.APPWRITE_DATABASE_ID, "job-events",
+        [Query.equal("jobId", "graph-test-job"), Query.equal("eventType", "agent_start"),
+         Query.limit(50)]
+    )
+    agent_names = set()
+    for doc in result["documents"]:
+        payload = json.loads(doc["payload"])
+        agent = payload.get("agent")
+        if agent:
+            agent_names.add(agent)
+    expected = {"analyst", "architect", "frontend_agent", "backend_agent",
+                "business_agent", "integrator", "validator", "github_agent"}
+    missing = expected - agent_names
+    assert not missing, f"Missing agent events: {missing}"
 
 
 # ── Run all tests ─────────────────────────────────────────────
@@ -186,19 +178,19 @@ async def test_all_agents_ran():
 if __name__ == "__main__":
     print("\n HackFarmer — Phase 3A Validation\n")
 
-    test("1. DB has all 6 tables", test_db_tables)
+    test("1. Appwrite has all 5 collections", test_appwrite_collections)
     test("2. Encryption round-trip", test_encryption)
     test("3. Normalizer produces valid state", test_normalizer)
     test("4. LLMRouter raises on empty providers", test_llm_router_empty)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    test("5. EventBus pub/sub works", lambda: loop.run_until_complete(test_event_bus()))
-    test("6. EventBus rejects invalid event types", test_event_bus_invalid)
+    test("5. Appwrite event publish works", test_event_publish)
+    test("6. publish rejects invalid event types", test_event_invalid_type)
     test("7. can_run_job returns True (no running jobs)", test_can_run_job)
     test("8. Graph compiles and pipeline runs", lambda: loop.run_until_complete(test_graph_compiles()))
-    test("9. Pipeline emits events (JobEvent count > 0)", lambda: loop.run_until_complete(test_pipeline_events()))
-    test("10. All 7 agents ran", lambda: loop.run_until_complete(test_all_agents_ran()))
+    test("9. Pipeline emits events (job-events count > 0)", test_pipeline_events)
+    test("10. All 8 agents ran", test_all_agents_ran)
     loop.close()
 
     print(f"\n{'='*50}")
