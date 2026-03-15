@@ -6,6 +6,7 @@ export function useJobStream(jobId) {
   const [agentStates, setAgentStates] = useState({})
   const [jobStatus, setJobStatus] = useState('running')
   const [result, setResult] = useState(null)
+  const [businessContent, setBusinessContent] = useState({})
   const unsubRef = useRef(null)
 
   useEffect(() => {
@@ -14,10 +15,12 @@ export function useJobStream(jobId) {
 
     // 1. Replay past events (page refresh recovery)
     databases.listDocuments(dbId, 'job-events', [
-      Query.equal('job_id', jobId),
+      Query.equal('jobId', jobId),
       Query.orderAsc('$createdAt'),
       Query.limit(200)
-    ]).then(res => res.documents.forEach(d => handleEvent(d.event_type, JSON.parse(d.payload))))
+    ]).then(res => res.documents.forEach(d => {
+      try { handleEvent(d.eventType, JSON.parse(d.payload)) } catch(e) { }
+    }))
 
     // 2. Subscribe to live events via Appwrite Realtime
     unsubRef.current = appwriteClient.subscribe(
@@ -25,8 +28,8 @@ export function useJobStream(jobId) {
       response => {
         if (!response.events.some(e => e.includes('.create'))) return
         const doc = response.payload
-        if (doc.job_id !== jobId) return
-        handleEvent(doc.event_type, JSON.parse(doc.payload))
+        if (doc.jobId !== jobId) return
+        try { handleEvent(doc.eventType, JSON.parse(doc.payload)) } catch(e) { }
       }
     )
     return () => unsubRef.current?.()
@@ -45,10 +48,17 @@ export function useJobStream(jobId) {
           files: payload.files_generated || []
         }
       }))
+      if (type === 'agent_done' && payload.agent === 'business_agent') {
+        setBusinessContent({
+          readme_content: payload.readme_content || '',
+          architecture_mermaid: payload.architecture_mermaid || '',
+          pitch_slides: payload.pitch_slides || [],
+        })
+      }
     }
     if (type === 'job_complete') { setJobStatus('complete'); setResult(payload) }
     if (type === 'job_failed')   { setJobStatus('failed') }
   }
 
-  return { agentStates, jobStatus, result }
+  return { agentStates, jobStatus, result, businessContent }
 }

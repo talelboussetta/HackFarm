@@ -27,3 +27,5 @@ class ProjectState(TypedDict):
     errors: List[str]
     status: str
     github_url: Optional[str]
+    repo_name: str
+    repo_private: bool

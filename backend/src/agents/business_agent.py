@@ -134,6 +134,9 @@ async def business_agent(state: ProjectState) -> dict:
     publish(job_id, "agent_done", {
         "agent": "business_agent",
         "summary": f"Generated README, {slide_count} pitch slides, and architecture diagram",
+        "readme_content": readme_content,
+        "architecture_mermaid": architecture_mermaid,
+        "pitch_slides": pitch_slides,
     })
 
     return {

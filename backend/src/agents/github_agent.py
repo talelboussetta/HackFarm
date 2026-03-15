@@ -11,9 +11,8 @@ from io import BytesIO
 from appwrite.input_file import InputFile
 
 from src.agents.state import ProjectState
-from src.appwrite_client import databases, storage
+from src.appwrite_client import databases, storage, users_service
 from src.core.config import settings
-from src.core.encryption import decrypt
 from src.core.events import publish
 from src.core.zip_builder import build_zip
 from src.integrations.github import GitHubClient
@@ -47,11 +46,21 @@ async def github_agent(state: ProjectState) -> dict:
     except Exception as e:
         log.warning(f"Failed to create agent-run doc: {e}")
 
-    # Step 3: retrieve GitHub token from user document
+    # Step 3: retrieve GitHub token from Appwrite identities
     try:
-        user_doc = databases.get_document(DB, "users", user_id)
-        token = decrypt(user_doc["encryptedGhToken"])
-        username = user_doc["username"]
+        from appwrite.query import Query as AQ
+        identities = users_service.list_identities(
+            queries=[AQ.equal("userId", user_id)]
+        )
+        github_identity = next(
+            (i for i in identities["identities"] if i["provider"] == "github"),
+            None
+        )
+        if not github_identity:
+            raise ValueError("No GitHub identity found for user")
+        token = github_identity["providerAccessToken"]
+        appwrite_user = users_service.get(user_id)
+        username = appwrite_user.get("name", "").replace(" ", "").lower() or user_id
     except Exception as e:
         error_msg = f"github_agent: Failed to retrieve GitHub credentials: {e}"
         publish(job_id, "agent_failed", {

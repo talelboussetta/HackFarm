@@ -125,7 +125,7 @@ function MarkdownRenderer({ content }) {
 export default function Job() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { agentStates, jobStatus, result } = useJobStream(id)
+  const { agentStates, jobStatus, result, businessContent } = useJobStream(id)
   const [rightTab, setRightTab] = useState('code')
   const [selectedFile, setSelectedFile] = useState(null)
   const [copied, setCopied] = useState(false)
@@ -149,10 +149,10 @@ export default function Job() {
   })
   const fileList = Object.keys(allFiles).sort()
 
-  // Derived data from result
-  const mermaidChart = result?.architecture_mermaid || null
-  const readmeContent = result?.readme_content || null
-  const pitchSlides = result?.pitch_slides || []
+  // Derived data from result and businessContent
+  const mermaidChart = businessContent?.architecture_mermaid || null
+  const readmeContent = businessContent?.readme_content || null
+  const pitchSlides = businessContent?.pitch_slides || []
   const githubUrl = result?.github_url || null
   const zipFileId = result?.zip_file_id || null
 

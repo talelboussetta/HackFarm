@@ -44,7 +44,7 @@ export default function Settings() {
     const fetchKeys = async () => {
       try {
         const data = await api('/api/settings/keys')
-        setKeys(data.keys || [])
+        setKeys(Array.isArray(data) ? data : [])
       } catch (e) {
         console.error('Failed to fetch keys:', e)
       } finally {
@@ -60,10 +60,10 @@ export default function Settings() {
     try {
       await api('/api/settings/keys', {
         method: 'POST',
-        body: JSON.stringify({ provider, api_key: newKey.trim() }),
+        body: JSON.stringify({ provider, key: newKey.trim() }),
       })
       const data = await api('/api/settings/keys')
-      setKeys(data.keys || [])
+      setKeys(Array.isArray(data) ? data : [])
       setAddingProvider(null)
       setNewKey('')
     } catch (e) {

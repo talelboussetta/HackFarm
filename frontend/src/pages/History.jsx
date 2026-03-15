@@ -44,7 +44,7 @@ export default function History() {
     const fetchJobs = async () => {
       try {
         const data = await api('/api/jobs')
-        setJobs(data.jobs || data || [])
+        setJobs(Array.isArray(data) ? data : [])
       } catch (e) {
         console.error('Failed to fetch jobs:', e)
       } finally {
