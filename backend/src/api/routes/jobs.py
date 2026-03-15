@@ -112,7 +112,7 @@ async def list_jobs(
     """Return all of the current user's jobs, newest first."""
     result = databases.list_documents(
         DB, "jobs",
-        [Query.equal("userId", user["id"]), Query.orderDesc("$createdAt"), Query.limit(50)]
+        [Query.equal("userId", user["id"]), Query.order_desc("$createdAt"), Query.limit(50)]
     )
     return [
         {
@@ -149,7 +149,7 @@ async def get_job(
 
     agent_runs = databases.list_documents(
         DB, "agent-runs",
-        [Query.equal("jobId", job_id), Query.orderAsc("startedAt")]
+        [Query.equal("jobId", job_id), Query.order_asc("startedAt")]
     )
 
     return {

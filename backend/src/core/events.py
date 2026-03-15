@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timezone
 from src.appwrite_client import databases
 from src.core.config import settings
+from appwrite.query import Query
 
 log = logging.getLogger(__name__)
 
@@ -14,15 +15,17 @@ VALID_EVENT_TYPES = {
 def publish(job_id: str, event_type: str, payload: dict) -> None:
     """
     Write event to Appwrite job-events collection.
-    Appwrite Realtime delivers it to all subscribed frontend clients automatically.
-    Signature unchanged from SSE version \u2014 all agents call this the same way.
+    Also syncs agent status to the agent-runs collection for high-level tracking.
     """
     if event_type not in VALID_EVENT_TYPES:
         raise ValueError(f"Invalid event type: {event_type}. Must be one of: {VALID_EVENT_TYPES}")
 
+    db_id = settings.APPWRITE_DATABASE_ID
+    
+    # 1. Store the event raw
     try:
         databases.create_document(
-            database_id=settings.APPWRITE_DATABASE_ID,
+            database_id=db_id,
             collection_id="job-events",
             document_id="unique()",
             data={
@@ -32,5 +35,39 @@ def publish(job_id: str, event_type: str, payload: dict) -> None:
             }
         )
     except Exception as e:
-        # Events are best-effort \u2014 log warning but NEVER crash the pipeline
-        log.warning(f"Event publish failed (non-fatal) job={job_id} type={event_type}: {e}")
+        log.warning(f"Event write failed (non-fatal) job={job_id}: {e}")
+
+    # 2. Update agent-runs tracking table
+    agent_name = payload.get("agent")
+    if agent_name and event_type in ("agent_start", "agent_done", "agent_failed"):
+        try:
+            # Check for existing run for this agent in this job
+            existing = databases.list_documents(
+                db_id, "agent-runs", 
+                [Query.equal("jobId", job_id), Query.equal("agentName", agent_name)]
+            )
+            
+            status_map = {
+                "agent_start": "running",
+                "agent_done": "done",
+                "agent_failed": "failed"
+            }
+            
+            data = {"status": status_map.get(event_type, "running")}
+            if event_type == "agent_start":
+                data["startedAt"] = datetime.now(timezone.utc).isoformat()
+            elif event_type in ("agent_done", "agent_failed"):
+                data["completedAt"] = datetime.now(timezone.utc).isoformat()
+            
+            if existing["total"] > 0:
+                doc_id = existing["documents"][0]["$id"]
+                databases.update_document(db_id, "agent-runs", doc_id, data)
+            else:
+                data.update({
+                    "jobId": job_id,
+                    "agentName": agent_name,
+                    "retryCount": 0
+                })
+                databases.create_document(db_id, "agent-runs", "unique()", data)
+        except Exception as e:
+            log.warning(f"Agent-run sync failed (non-fatal) agent={agent_name}: {e}")
