@@ -2,6 +2,7 @@
 HackFarmer — FastAPI application.
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.core.config import settings
 from src.store.db import create_all
+from src.core.events import start_heartbeat_task
+from src.core.queue_manager import start_queue_poller
 
 from src.api.routes.auth import router as auth_router
 from src.api.routes.jobs import router as jobs_router
@@ -20,8 +23,24 @@ from src.api.routes.downloads import router as downloads_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
+    # Startup
     create_all()
+    heartbeat_task = asyncio.create_task(start_heartbeat_task())
+    poller_task = asyncio.create_task(start_queue_poller())
+
     yield
+
+    # Shutdown — cancel background tasks
+    heartbeat_task.cancel()
+    poller_task.cancel()
+    try:
+        await heartbeat_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await poller_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(
@@ -51,3 +70,8 @@ app.include_router(downloads_router, prefix="/api/downloads", tags=["downloads"]
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+@app.get("/internal/health")
+async def internal_health():
+    return {"status": "ok", "db": "connected"}
