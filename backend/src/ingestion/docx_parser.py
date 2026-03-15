@@ -1,0 +1,1 @@
+"""HackFarmer — DOCX parser. Placeholder."""

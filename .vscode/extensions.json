@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "ms-python.python",
+    "bradlc.vscode-tailwindcss",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "GitHub.copilot",
+    "GitHub.copilot-chat",
+    "mtxr.sqltools",
+    "mtxr.sqltools-driver-sqlite"
+  ]
+}

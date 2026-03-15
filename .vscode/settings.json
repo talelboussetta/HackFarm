@@ -1,0 +1,18 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "charliermarsh.ruff",
+  "python.defaultInterpreterPath": "./backend/.venv/bin/python",
+  "files.associations": {
+    "*.cursorrules": "markdown"
+  },
+  "editor.rulers": [88],
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/__pycache__": true,
+    "**/.venv": true,
+    "**/hackfarmer.db": true
+  },
+  "github.copilot.chat.codeGeneration.instructions": [
+    { "file": ".cursorrules" }
+  ]
+}

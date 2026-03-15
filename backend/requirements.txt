@@ -1,0 +1,41 @@
+# HackFarmer — Backend Dependencies
+# Install: pip install -r requirements.txt
+
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sse-starlette==2.2.1
+
+# Database
+sqlalchemy==2.0.36
+aiosqlite==0.20.0
+alembic==1.14.1
+
+# Auth & Security
+pyjwt==2.10.1
+cryptography==44.0.0
+httpx==0.28.1
+
+# AI / Agents
+langgraph==0.2.60
+openai==1.58.1
+
+# Vector store
+chromadb==0.5.23
+sentence-transformers==3.3.1
+
+# Document parsing
+pymupdf==1.25.1
+python-docx==1.1.2
+
+# Configuration
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# Utilities
+bleach==6.2.0
+
+# Dev tools
+ruff==0.8.6
+pytest==8.3.4
+pytest-asyncio==0.25.0

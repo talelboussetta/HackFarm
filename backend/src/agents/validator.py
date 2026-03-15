@@ -1,0 +1,1 @@
+"""HackFarmer — Validator agent. Placeholder."""
