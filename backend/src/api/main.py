@@ -7,14 +7,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.src.core.config import settings
-from backend.src.store.db import create_all
+from src.core.config import settings
+from src.store.db import create_all
 
-from backend.src.api.routes.auth import router as auth_router
-from backend.src.api.routes.jobs import router as jobs_router
-from backend.src.api.routes.stream import router as stream_router
-from backend.src.api.routes.settings import router as settings_router
-from backend.src.api.routes.downloads import router as downloads_router
+from src.api.routes.auth import router as auth_router
+from src.api.routes.jobs import router as jobs_router
+from src.api.routes.stream import router as stream_router
+from src.api.routes.settings import router as settings_router
+from src.api.routes.downloads import router as downloads_router
 
 
 @asynccontextmanager

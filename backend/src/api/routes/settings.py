@@ -15,9 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
-from backend.src.core.encryption import encrypt, decrypt
-from backend.src.store.db import get_db, User, UserApiKey
-from backend.src.api.dependencies import get_current_user
+from src.core.encryption import encrypt, decrypt
+from src.store.db import get_db, User, UserApiKey
+from src.api.dependencies import get_current_user
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

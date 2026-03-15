@@ -4,7 +4,7 @@ HackFarmer — Fernet encryption helpers for GitHub tokens and API keys.
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from backend.src.core.config import settings
+from src.core.config import settings
 
 
 def _get_fernet() -> Fernet:

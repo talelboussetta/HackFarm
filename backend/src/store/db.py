@@ -5,7 +5,7 @@ Models:
   User, UserApiKey, Job, AgentRun, GeneratedFile, JobEvent
 
 Usage:
-  from backend.src.store.db import get_db, create_all
+  from src.store.db import get_db, create_all
 """
 
 import uuid
@@ -23,7 +23,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
-from backend.src.core.config import settings
+from src.core.config import settings
 
 # ── Engine & Session ──────────────────────────────────────────
 

@@ -5,8 +5,8 @@ Retrieves and decrypts LLM API keys for a given user.
 
 from sqlalchemy.orm import Session
 
-from backend.src.core.encryption import decrypt
-from backend.src.store.db import SessionLocal, UserApiKey
+from src.core.encryption import decrypt
+from src.store.db import SessionLocal, UserApiKey
 
 
 def get_user_llm_providers(user_id: str) -> list[dict]:

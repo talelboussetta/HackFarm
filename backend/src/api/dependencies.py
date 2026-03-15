@@ -8,8 +8,8 @@ import jwt
 from fastapi import HTTPException, Request, Depends
 from sqlalchemy.orm import Session
 
-from backend.src.core.config import settings
-from backend.src.store.db import get_db, User
+from src.core.config import settings
+from src.store.db import get_db, User
 
 
 async def get_current_user(
