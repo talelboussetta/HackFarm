@@ -1,29 +1,43 @@
+import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Layout, History, Settings, LogOut, Github } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Layout, History, Settings, LogOut, Github, ChevronDown } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import Button from './Button'
 
 export default function Navbar() {
-  const { user, loginWithGitHub, logout } = useAuth()
+  const { user, loading, loginWithGitHub, logout } = useAuth()
   const location = useLocation()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef(null)
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   const navItems = [
-    { name: 'Dashboard', path: '/', icon: Layout },
+    { name: 'Home', path: '/', icon: Layout },
     { name: 'History', path: '/history', icon: History },
-    { name: 'Settings', path: '/settings', icon: Settings },
   ]
 
+  const avatar = user?.prefs?.avatar || null
+  const initials = user?.name?.[0]?.toUpperCase() || 'U'
+
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-black/60 backdrop-blur-xl">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.08] bg-[#0a0a0a]/80 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center gap-2 group">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
-                <span className="text-white font-bold">HF</span>
-              </div>
-              <span className="text-white font-bold text-lg tracking-tight">HackFarmer</span>
+              <span className="text-white font-bold text-xl tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                HackFarmer
+              </span>
             </Link>
 
             <div className="hidden md:flex items-center gap-1">
@@ -49,31 +63,68 @@ export default function Navbar() {
 
           <div className="flex items-center gap-4">
             {user ? (
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
-                    {user.name?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <span className="text-sm text-white/80 font-medium">{user.name}</span>
-                </div>
+              <div className="relative" ref={dropdownRef}>
                 <button
-                  onClick={logout}
-                  className="p-2 text-white/60 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
-                  title="Logout"
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
                 >
-                  <LogOut size={20} />
+                  {avatar ? (
+                    <img src={avatar} alt="" className="w-6 h-6 rounded-full" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
+                      {initials}
+                    </div>
+                  )}
+                  <span className="text-sm text-white/80 font-medium">{user.name}</span>
+                  <ChevronDown size={14} className={`text-white/40 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
+
+                <AnimatePresence>
+                  {dropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-48 py-1 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl"
+                    >
+                      <Link
+                        to="/history"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                      >
+                        <History size={16} /> History
+                      </Link>
+                      <Link
+                        to="/settings"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                      >
+                        <Settings size={16} /> Settings
+                      </Link>
+                      <div className="border-t border-white/5 my-1" />
+                      <button
+                        onClick={() => { setDropdownOpen(false); logout() }}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 w-full transition-colors"
+                      >
+                        <LogOut size={16} /> Logout
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             ) : (
-              <Button 
-                onClick={loginWithGitHub}
-                variant="secondary" 
-                size="sm"
-                className="gap-2"
-              >
-                <Github size={18} />
-                Sign in with GitHub
-              </Button>
+              !loading && (
+                <Button 
+                  onClick={loginWithGitHub}
+                  variant="secondary" 
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Github size={18} />
+                  Login with GitHub
+                </Button>
+              )
             )}
           </div>
         </div>

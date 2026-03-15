@@ -1,0 +1,39 @@
+name: Deploy HackFarmer
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Deploy Backend to Heroku
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: akhileshns/heroku-deploy@v3.12.12
+        with:
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_app_name: hackfarmer-api
+          heroku_email: ${{ secrets.HEROKU_EMAIL }}
+          appdir: backend
+
+  frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install & Build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Deploy to Appwrite Sites
+        working-directory: frontend
+        run: |
+          npm install -g appwrite-cli
+          appwrite login --endpoint ${{ secrets.APPWRITE_ENDPOINT }} --project ${{ secrets.APPWRITE_PROJECT_ID }} --key ${{ secrets.APPWRITE_API_KEY }}
+          appwrite deploy site --site-id hackfarmer-frontend --build-path dist
+
