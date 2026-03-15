@@ -13,11 +13,12 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy.orm import Session
+from appwrite.query import Query
 
 from src.core.encryption import encrypt, decrypt
-from src.store.db import get_db, User, UserApiKey
 from src.api.dependencies import get_current_user
+from src.appwrite_client import databases
+from src.core.config import settings
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -63,19 +64,22 @@ def _mask_key(key: str) -> str:
 
 @router.get("/keys")
 async def list_keys(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Return configured providers with masked keys."""
-    keys = db.query(UserApiKey).filter(UserApiKey.user_id == user.id).all()
+    db_id = settings.APPWRITE_DATABASE_ID
+    result = databases.list_documents(
+        db_id, "user-api-keys",
+        [Query.equal("userId", user["id"])]
+    )
     return [
         {
-            "provider": k.provider,
-            "masked_key": _mask_key(decrypt(k.encrypted_key)),
-            "is_valid": k.is_valid,
-            "last_used": k.last_used.isoformat() if k.last_used else None,
+            "provider": k["provider"],
+            "masked_key": _mask_key(decrypt(k["encryptedKey"])),
+            "is_valid": k["isValid"],
+            "last_used": k["lastUsed"] if k.get("lastUsed") else None,
         }
-        for k in keys
+        for k in result["documents"]
     ]
 
 
@@ -84,36 +88,43 @@ async def list_keys(
 @router.post("/keys")
 async def upsert_key(
     body: KeyCreateRequest,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Encrypt and upsert an API key (one per provider per user)."""
-    existing = (
-        db.query(UserApiKey)
-        .filter(UserApiKey.user_id == user.id, UserApiKey.provider == body.provider)
-        .first()
+    db_id = settings.APPWRITE_DATABASE_ID
+    
+    # Check for existing
+    result = databases.list_documents(
+        db_id, "user-api-keys",
+        [Query.equal("userId", user["id"]), Query.equal("provider", body.provider)]
     )
 
     encrypted = encrypt(body.key)
 
-    if existing:
-        existing.encrypted_key = encrypted
-        existing.is_valid = True
-    else:
-        existing = UserApiKey(
-            user_id=user.id,
-            provider=body.provider,
-            encrypted_key=encrypted,
+    if result["total"] > 0:
+        doc = result["documents"][0]
+        updated = databases.update_document(
+            db_id, "user-api-keys", doc["$id"],
+            {
+                "encryptedKey": encrypted,
+                "isValid": True,
+            }
         )
-        db.add(existing)
-
-    db.commit()
-    db.refresh(existing)
+    else:
+        updated = databases.create_document(
+            db_id, "user-api-keys", "unique()",
+            {
+                "userId": user["id"],
+                "provider": body.provider,
+                "encryptedKey": encrypted,
+                "isValid": True,
+            }
+        )
 
     return {
-        "provider": existing.provider,
+        "provider": updated["provider"],
         "masked_key": _mask_key(body.key),
-        "is_valid": existing.is_valid,
+        "is_valid": updated["isValid"],
     }
 
 
@@ -122,23 +133,22 @@ async def upsert_key(
 @router.delete("/keys/{provider}")
 async def delete_key(
     provider: str,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Delete a provider key for the current user."""
     if provider not in ALLOWED_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}")
 
-    key = (
-        db.query(UserApiKey)
-        .filter(UserApiKey.user_id == user.id, UserApiKey.provider == provider)
-        .first()
+    db_id = settings.APPWRITE_DATABASE_ID
+    result = databases.list_documents(
+        db_id, "user-api-keys",
+        [Query.equal("userId", user["id"]), Query.equal("provider", provider)]
     )
-    if not key:
+    
+    if result["total"] == 0:
         raise HTTPException(status_code=404, detail="Key not found")
 
-    db.delete(key)
-    db.commit()
+    databases.delete_document(db_id, "user-api-keys", result["documents"][0]["$id"])
     return {"deleted": True}
 
 
@@ -147,8 +157,7 @@ async def delete_key(
 @router.post("/keys/{provider}/test")
 async def test_key(
     provider: str,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Make a minimal LLM call to verify the stored key works.
@@ -157,15 +166,17 @@ async def test_key(
     if provider not in ALLOWED_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}")
 
-    key_row = (
-        db.query(UserApiKey)
-        .filter(UserApiKey.user_id == user.id, UserApiKey.provider == provider)
-        .first()
+    db_id = settings.APPWRITE_DATABASE_ID
+    result = databases.list_documents(
+        db_id, "user-api-keys",
+        [Query.equal("userId", user["id"]), Query.equal("provider", provider)]
     )
-    if not key_row:
+    
+    if result["total"] == 0:
         raise HTTPException(status_code=404, detail="Key not found")
 
-    decrypted_key = decrypt(key_row.encrypted_key)
+    doc = result["documents"][0]
+    decrypted_key = decrypt(doc["encryptedKey"])
     cfg = PROVIDER_CONFIG[provider]
 
     try:
@@ -187,16 +198,24 @@ async def test_key(
             content = data["choices"][0]["message"]["content"].strip().lower()
 
             if "ok" in content:
-                key_row.is_valid = True
-                key_row.last_used = datetime.now(timezone.utc)
-                db.commit()
+                databases.update_document(
+                    db_id, "user-api-keys", doc["$id"],
+                    {
+                        "isValid": True,
+                        "lastUsed": datetime.now(timezone.utc).isoformat()
+                    }
+                )
                 return {"valid": True}
             else:
-                key_row.is_valid = False
-                db.commit()
+                databases.update_document(
+                    db_id, "user-api-keys", doc["$id"],
+                    {"isValid": False}
+                )
                 return {"valid": False, "error": f"Unexpected response: {content}"}
 
     except Exception as exc:
-        key_row.is_valid = False
-        db.commit()
+        databases.update_document(
+            db_id, "user-api-keys", doc["$id"],
+            {"isValid": False}
+        )
         return {"valid": False, "error": str(exc)}

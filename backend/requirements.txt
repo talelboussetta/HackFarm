@@ -37,6 +37,7 @@ bleach==6.2.0
 
 # Appwrite (BaaS)
 appwrite>=6.0.0
+python-multipart>=0.0.9
 
 # Dev tools
 ruff==0.8.6

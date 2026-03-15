@@ -26,8 +26,8 @@ def publish(job_id: str, event_type: str, payload: dict) -> None:
             collection_id="job-events",
             document_id="unique()",
             data={
-                "job_id": job_id,
-                "event_type": event_type,
+                "jobId": job_id,
+                "eventType": event_type,
                 "payload": json.dumps(payload),
             }
         )
