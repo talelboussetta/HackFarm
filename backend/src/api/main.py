@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.core.config import settings
 from src.store.db import create_all
-from src.core.events import start_heartbeat_task
+# from src.core.events import start_heartbeat_task (SSE only)
 from src.core.queue_manager import start_queue_poller
 
 from src.api.routes.auth import router as auth_router
@@ -25,18 +25,16 @@ async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     # Startup
     create_all()
-    heartbeat_task = asyncio.create_task(start_heartbeat_task())
+    # heartbeat_task = asyncio.create_task(start_heartbeat_task()) (SSE only)
     poller_task = asyncio.create_task(start_queue_poller())
 
     yield
 
     # Shutdown — cancel background tasks
-    heartbeat_task.cancel()
+    # heartbeat_task.cancel()
     poller_task.cancel()
-    try:
-        await heartbeat_task
-    except asyncio.CancelledError:
-        pass
+    # except asyncio.CancelledError:
+    #     pass
     try:
         await poller_task
     except asyncio.CancelledError:
@@ -49,6 +47,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.state.appwrite_project_id = settings.APPWRITE_PROJECT_ID
+
 
 # CORS — allow the frontend dev server
 app.add_middleware(

@@ -1,46 +1,39 @@
-"""
-HackFarmer — FastAPI dependencies.
-"""
+from appwrite.services.account import Account
+from fastapi import HTTPException, Request
+from src.appwrite_client import build_session_client
 
-from datetime import datetime, timezone
-
-import jwt
-from fastapi import HTTPException, Request, Depends
-from sqlalchemy.orm import Session
-
-from src.core.config import settings
-from src.store.db import get_db, User
-
-
-async def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> User:
+async def get_current_user(request: Request) -> dict:
     """
-    Read hf_session cookie → validate JWT → fetch User from DB → return User.
-    Raises HTTP 401 if any step fails.
+    Verify Appwrite session from cookie or Authorization header.
+    Appwrite sets a cookie named: a_session_{project_id}
+    Also accept session token from X-Appwrite-Session header for API clients.
+    Returns: {id: str, name: str, email: str}
+    Raises: HTTP 401 if session invalid or missing
     """
-    token = request.cookies.get("hf_session")
-    if not token:
+    # Try cookie first (browser clients)
+    project_id = request.app.state.appwrite_project_id  \
+                 if hasattr(request.app.state, 'appwrite_project_id') \
+                 else None
+    session_token = None
+    
+    # Appwrite cookie name follows pattern: a_session_{project_id_lowercase}
+    for cookie_name, cookie_val in request.cookies.items():
+        if cookie_name.startswith("a_session_"):
+            session_token = cookie_val
+            break
+    
+    # Fall back to header
+    if not session_token:
+        session_token = request.headers.get("X-Appwrite-Session")
+    
+    if not session_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-
+    
     try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
-        )
-    except jwt.ExpiredSignatureError:
+        user_client = build_session_client(session_token)
+        account = Account(user_client)
+        user = account.get()
+        return {"id": user["$id"], "name": user["name"], 
+                "email": user.get("email", "")}
+    except Exception:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    user_id: str | None = payload.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    return user
