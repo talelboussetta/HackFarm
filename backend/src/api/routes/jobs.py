@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from src.store.db import get_db, Job, AgentRun, UserApiKey, User, SessionLocal
 from src.api.dependencies import get_current_user
-from src.core.events import event_bus
+from src.core.events import publish
 from src.core.queue_manager import GlobalSemaphore, can_run_job
 from src.core.key_manager import get_user_llm_providers
 from src.llm.router import LLMRouter
@@ -271,7 +271,7 @@ async def run_pipeline_task(
             job.error_message = str(e)[:500]
             job.completed_at = datetime.now(timezone.utc)
             db.commit()
-        event_bus.publish(
+        publish(
             job_id, "job_failed", {"error": str(e), "last_agent": "unknown"}
         )
     finally:

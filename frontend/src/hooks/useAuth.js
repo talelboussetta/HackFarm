@@ -1,20 +1,30 @@
-/**
- * Auth hook for JWT cookie state.
- * Placeholder — will be implemented in Phase 2.
- */
-import { useState, useEffect } from 'react';
-import { api } from '../lib/api';
+import { account } from '../lib/appwrite'
+import { useState, useEffect } from 'react'
+import { OAuthProvider } from 'appwrite'
 
 export function useAuth() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api('/auth/me')
-      .then(data => setUser(data))
+    account.get()
+      .then(u => setUser(u))
       .catch(() => setUser(null))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => setLoading(false))
+  }, [])
 
-  return { user, loading };
+  const loginWithGitHub = () => {
+    account.createOAuth2Session(
+      OAuthProvider.Github,
+      window.location.origin + '/',
+      window.location.origin + '/login-error'
+    )
+  }
+
+  const logout = async () => {
+    await account.deleteSession('current')
+    setUser(null)
+  }
+
+  return { user, loading, loginWithGitHub, logout }
 }

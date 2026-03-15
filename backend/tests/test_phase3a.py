@@ -89,7 +89,7 @@ async def test_event_bus():
     from src.core.events import EventBus
     bus = EventBus()
     queue = bus.subscribe("test-job-1")
-    bus.publish.__wrapped__ = None  # We need to test without DB persistence
+    
     # Use the bus directly but catch DB errors
     try:
         bus.publish("test-job-1", "agent_start", {"agent": "test", "message": "hi", "estimated_seconds": 1})
@@ -184,7 +184,7 @@ async def test_all_agents_ran():
 # ── Run all tests ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("\n🌾 HackFarmer — Phase 3A Validation\n")
+    print("\n HackFarmer — Phase 3A Validation\n")
 
     test("1. DB has all 6 tables", test_db_tables)
     test("2. Encryption round-trip", test_encryption)

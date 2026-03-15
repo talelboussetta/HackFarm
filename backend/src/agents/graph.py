@@ -14,7 +14,7 @@ import logging
 from langgraph.graph import StateGraph, END
 
 from src.agents.state import ProjectState
-from src.core.events import event_bus
+from src.core.events import publish
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +24,11 @@ logger = logging.getLogger(__name__)
 
 async def analyst(state: ProjectState) -> dict:
     job_id = state["job_id"]
-    event_bus.publish(job_id, "agent_start", {
+    publish(job_id, "agent_start", {
         "agent": "analyst", "message": "Analyzing spec...", "estimated_seconds": 10
     })
     await asyncio.sleep(0.3)
-    event_bus.publish(job_id, "agent_done", {
+    publish(job_id, "agent_done", {
         "agent": "analyst", "summary": "Found 2 features across 1 category"
     })
     return {
@@ -43,11 +43,11 @@ async def analyst(state: ProjectState) -> dict:
 
 async def architect(state: ProjectState) -> dict:
     job_id = state["job_id"]
-    event_bus.publish(job_id, "agent_start", {
+    publish(job_id, "agent_start", {
         "agent": "architect", "message": "Designing architecture...", "estimated_seconds": 15
     })
     await asyncio.sleep(0.3)
-    event_bus.publish(job_id, "agent_done", {
+    publish(job_id, "agent_done", {
         "agent": "architect", "summary": "Designed 1 endpoint, 2 component groups"
     })
     return {
@@ -60,11 +60,11 @@ async def architect(state: ProjectState) -> dict:
 
 async def frontend_agent(state: ProjectState) -> dict:
     job_id = state["job_id"]
-    event_bus.publish(job_id, "agent_start", {
+    publish(job_id, "agent_start", {
         "agent": "frontend_agent", "message": "Generating frontend...", "estimated_seconds": 20
     })
     await asyncio.sleep(0.3)
-    event_bus.publish(job_id, "agent_done", {
+    publish(job_id, "agent_done", {
         "agent": "frontend_agent", "summary": "Generated 1 file",
         "files_generated": ["frontend/src/App.jsx"]
     })
@@ -75,11 +75,11 @@ async def frontend_agent(state: ProjectState) -> dict:
 
 async def backend_agent(state: ProjectState) -> dict:
     job_id = state["job_id"]
-    event_bus.publish(job_id, "agent_start", {
+    publish(job_id, "agent_start", {
         "agent": "backend_agent", "message": "Generating backend...", "estimated_seconds": 20
     })
     await asyncio.sleep(0.3)
-    event_bus.publish(job_id, "agent_done", {
+    publish(job_id, "agent_done", {
         "agent": "backend_agent", "summary": "Generated 1 file",
         "files_generated": ["backend/main.py"]
     })
@@ -90,11 +90,11 @@ async def backend_agent(state: ProjectState) -> dict:
 
 async def business_agent(state: ProjectState) -> dict:
     job_id = state["job_id"]
-    event_bus.publish(job_id, "agent_start", {
+    publish(job_id, "agent_start", {
         "agent": "business_agent", "message": "Writing README and pitch...", "estimated_seconds": 15
     })
     await asyncio.sleep(0.3)
-    event_bus.publish(job_id, "agent_done", {
+    publish(job_id, "agent_done", {
         "agent": "business_agent", "summary": "Generated README, pitch, and diagram"
     })
     return {
@@ -106,11 +106,11 @@ async def business_agent(state: ProjectState) -> dict:
 
 async def integrator(state: ProjectState) -> dict:
     job_id = state["job_id"]
-    event_bus.publish(job_id, "agent_start", {
+    publish(job_id, "agent_start", {
         "agent": "integrator", "message": "Integrating files...", "estimated_seconds": 10
     })
     await asyncio.sleep(0.3)
-    event_bus.publish(job_id, "agent_done", {
+    publish(job_id, "agent_done", {
         "agent": "integrator", "summary": "Added dependency files"
     })
     return {
@@ -120,11 +120,11 @@ async def integrator(state: ProjectState) -> dict:
 
 async def validator(state: ProjectState) -> dict:
     job_id = state["job_id"]
-    event_bus.publish(job_id, "agent_start", {
+    publish(job_id, "agent_start", {
         "agent": "validator", "message": "Validating output...", "estimated_seconds": 5
     })
     await asyncio.sleep(0.3)
-    event_bus.publish(job_id, "agent_done", {
+    publish(job_id, "agent_done", {
         "agent": "validator", "summary": "Score: 85/100, 0 issues found"
     })
     return {
@@ -135,17 +135,18 @@ async def validator(state: ProjectState) -> dict:
 
 async def github_agent(state: ProjectState) -> dict:
     job_id = state["job_id"]
-    event_bus.publish(job_id, "agent_start", {
+    publish(job_id, "agent_start", {
         "agent": "github_agent", "message": "Pushing to GitHub...", "estimated_seconds": 10
     })
     await asyncio.sleep(0.3)
-    event_bus.publish(job_id, "job_complete", {
+    publish(job_id, "job_complete", {
         "github_url": "https://github.com/stub/repo",
         "zip_path": "",
         "file_count": 3,
         "validation_score": state.get("validation_score", 0),
         "total_seconds": 5,
     })
+
     return {
         "github_url": "https://github.com/stub/repo",
         "status": "complete",

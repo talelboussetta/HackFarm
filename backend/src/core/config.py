@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     # ── Concurrency ────────────────────────────────────────────
     MAX_CONCURRENT_JOBS: int = 3
 
+    # ── Appwrite (BaaS) ────────────────────────────────────────
+    APPWRITE_ENDPOINT: str = "https://cloud.appwrite.io/v1"
+    APPWRITE_PROJECT_ID: str = ""
+    APPWRITE_API_KEY: str = ""
+    APPWRITE_DATABASE_ID: str = "hackfarmer-db"
+    APPWRITE_ZIP_BUCKET_ID: str = "generated-zips"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
