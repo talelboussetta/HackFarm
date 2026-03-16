@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from src.agents.state import ProjectState
+from appwrite.id import ID
 from src.appwrite_client import databases
 from src.core.config import settings
 from src.core.events import publish
@@ -29,6 +30,16 @@ _DEFAULT_TECH_STACK = {
 
 async def architect(state: ProjectState) -> dict:
     job_id = state["job_id"]
+    try:
+        return await _architect_impl(state)
+    except Exception as e:
+        log.error(f"architect CRASHED: {type(e).__name__}: {e}", exc_info=True)
+        publish(job_id, "agent_failed", {"agent": "architect", "error": f"Unexpected: {e}"})
+        return {"errors": state.get("errors", []) + [f"architect: {type(e).__name__}: {e}"]}
+
+
+async def _architect_impl(state: ProjectState) -> dict:
+    job_id = state["job_id"]
 
     # Step 1: publish agent_start
     publish(job_id, "agent_start", {
@@ -40,7 +51,7 @@ async def architect(state: ProjectState) -> dict:
     # Step 2: create AgentRun document in Appwrite
     agent_run_id = None
     try:
-        doc = databases.create_document(DB, "agent-runs", "unique()", {
+        doc = databases.create_document(DB, "agent-runs", ID.unique(), {
             "jobId": job_id,
             "agentName": "architect",
             "status": "running",
@@ -56,8 +67,8 @@ async def architect(state: ProjectState) -> dict:
     # Step 3: load architect.txt and fill placeholders
     prompt_path = Path(__file__).parent.parent / "llm" / "prompts" / "architect.txt"
     template = prompt_path.read_text()
-    mvp_str = json.dumps(state["mvp_features"], indent=2)
-    constraints_str = json.dumps(state["constraints"], indent=2)
+    mvp_str = json.dumps(state["mvp_features"], indent=2)[:3000]
+    constraints_str = json.dumps(state["constraints"], indent=2)[:1000]
     prompt = (
         template
         .replace("{project_name}", state["project_name"])
@@ -77,10 +88,18 @@ async def architect(state: ProjectState) -> dict:
     max_retries = 2
     for attempt in range(max_retries):
         try:
+            publish(job_id, "agent_thinking", {
+                "agent": "architect",
+                "message": f"Calling LLM (attempt {attempt + 1})..." if attempt > 0 else "Calling LLM for architecture design...",
+            })
             raw = await asyncio.wait_for(
-                state["llm"].complete(prompt, response_format="json", temperature=0.3),
+                state["llm"].complete(prompt, response_format="json", temperature=0.3, agent_name="architect"),
                 timeout=120,
             )
+            publish(job_id, "agent_thinking", {
+                "agent": "architect",
+                "message": f"LLM responded ({len(raw)} chars), parsing architecture...",
+            })
             break
         except asyncio.TimeoutError:
             log.warning(f"architect: LLM call timed out (attempt {attempt + 1}/{max_retries})")
@@ -102,7 +121,7 @@ async def architect(state: ProjectState) -> dict:
                 except Exception:
                     pass
             return {"errors": state.get("errors", []) + ["architect: LLM timed out"]}
-        except RuntimeError as e:
+        except Exception as e:
             publish(job_id, "agent_failed", {
                 "agent": "architect", "error": str(e), "retry_count": attempt,
             })
@@ -153,11 +172,40 @@ async def architect(state: ProjectState) -> dict:
     endpoint_count = len(api_contracts)
     component_count = len(component_map.get("frontend", [])) + len(component_map.get("backend", []))
 
-    # Step 8: publish thinking update
+    # Step 8: publish detailed thinking updates
     publish(job_id, "agent_thinking", {
         "agent": "architect",
-        "message": f"Mapping component responsibilities — {endpoint_count} endpoints, {component_count} components",
+        "message": f"Tech stack: {tech_stack.get('frontend', '?')} + {tech_stack.get('backend', '?')} + {tech_stack.get('database', '?')}",
     })
+
+    if api_contracts:
+        endpoints_str = ", ".join(list(api_contracts.keys())[:4])
+        publish(job_id, "agent_thinking", {
+            "agent": "architect",
+            "message": f"API endpoints ({endpoint_count}): {endpoints_str}",
+        })
+
+    fe_components = component_map.get("frontend", [])
+    be_components = component_map.get("backend", [])
+    if fe_components:
+        fe_str = ", ".join([c.split("/")[-1] for c in fe_components[:4]])
+        publish(job_id, "agent_thinking", {
+            "agent": "architect",
+            "message": f"Frontend components ({len(fe_components)}): {fe_str}",
+        })
+    if be_components:
+        be_str = ", ".join([c.split("/")[-1] for c in be_components[:4]])
+        publish(job_id, "agent_thinking", {
+            "agent": "architect",
+            "message": f"Backend modules ({len(be_components)}): {be_str}",
+        })
+
+    if database_schema:
+        tables_str = ", ".join(list(database_schema.keys())[:5])
+        publish(job_id, "agent_thinking", {
+            "agent": "architect",
+            "message": f"Database tables ({len(database_schema)}): {tables_str}",
+        })
 
     # Step 9: update AgentRun + publish agent_done
     if agent_run_id:
@@ -173,6 +221,11 @@ async def architect(state: ProjectState) -> dict:
     publish(job_id, "agent_done", {
         "agent": "architect",
         "summary": f"Designed {endpoint_count} endpoints, {component_count} components",
+        "tech_stack": tech_stack,
+        "endpoint_count": endpoint_count,
+        "component_count": component_count,
+        "api_endpoints": list(api_contracts.keys())[:8],
+        "database_tables": list(database_schema.keys()),
     })
 
     # Step 10: return ONLY the fields this agent sets

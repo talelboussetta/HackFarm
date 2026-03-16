@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from src.agents.state import ProjectState
+from appwrite.id import ID
 from src.appwrite_client import databases
 from src.core.config import settings
 from src.core.events import publish
@@ -21,6 +22,16 @@ DB = settings.APPWRITE_DATABASE_ID
 
 
 async def analyst(state: ProjectState) -> dict:
+    job_id = state["job_id"]
+    try:
+        return await _analyst_impl(state)
+    except Exception as e:
+        log.error(f"analyst CRASHED: {type(e).__name__}: {e}", exc_info=True)
+        publish(job_id, "agent_failed", {"agent": "analyst", "error": f"Unexpected: {e}"})
+        return {"errors": state.get("errors", []) + [f"analyst: {type(e).__name__}: {e}"]}
+
+
+async def _analyst_impl(state: ProjectState) -> dict:
     job_id = state["job_id"]
 
     # Step 1: publish agent_start
@@ -33,7 +44,7 @@ async def analyst(state: ProjectState) -> dict:
     # Step 2: create AgentRun document in Appwrite
     agent_run_id = None
     try:
-        doc = databases.create_document(DB, "agent-runs", "unique()", {
+        doc = databases.create_document(DB, "agent-runs", ID.unique(), {
             "jobId": job_id,
             "agentName": "analyst",
             "status": "running",
@@ -67,7 +78,7 @@ async def analyst(state: ProjectState) -> dict:
                 "message": f"Calling LLM (attempt {attempt + 1})..." if attempt > 0 else "Calling LLM to analyze specification...",
             })
             raw = await asyncio.wait_for(
-                state["llm"].complete(prompt, response_format="json"),
+                state["llm"].complete(prompt, response_format="json", agent_name="analyst"),
                 timeout=120,
             )
             publish(job_id, "agent_thinking", {
@@ -95,7 +106,7 @@ async def analyst(state: ProjectState) -> dict:
                 except Exception:
                     pass
             return {"errors": state.get("errors", []) + ["analyst: LLM timed out"]}
-        except RuntimeError as e:
+        except Exception as e:
             publish(job_id, "agent_failed", {
                 "agent": "analyst", "error": str(e), "retry_count": attempt,
             })
@@ -145,11 +156,32 @@ async def analyst(state: ProjectState) -> dict:
     constraints = data.get("constraints", [])
     domain = data.get("domain", "other")
 
-    # Step 8: publish thinking update
+    # Step 8: publish detailed thinking updates with extracted data
     publish(job_id, "agent_thinking", {
         "agent": "analyst",
-        "message": f"Identified {len(mvp_features)} core features in {domain} domain",
+        "message": f"Project: \"{project_name}\" | Domain: {domain}",
     })
+
+    if mvp_features:
+        features_str = ", ".join(mvp_features[:5])
+        publish(job_id, "agent_thinking", {
+            "agent": "analyst",
+            "message": f"MVP Features ({len(mvp_features)}): {features_str}",
+        })
+
+    if constraints:
+        constraints_str = ", ".join(constraints[:3])
+        publish(job_id, "agent_thinking", {
+            "agent": "analyst",
+            "message": f"Constraints: {constraints_str}",
+        })
+
+    if judging_criteria:
+        criteria_str = ", ".join(judging_criteria[:3])
+        publish(job_id, "agent_thinking", {
+            "agent": "analyst",
+            "message": f"Judging criteria: {criteria_str}",
+        })
 
     # Step 9: update AgentRun + publish agent_done
     if agent_run_id:
@@ -165,6 +197,11 @@ async def analyst(state: ProjectState) -> dict:
     publish(job_id, "agent_done", {
         "agent": "analyst",
         "summary": f"Extracted {len(mvp_features)} MVP features across {domain} domain",
+        "mvp_features": mvp_features,
+        "project_name": project_name,
+        "domain": domain,
+        "constraints": constraints,
+        "judging_criteria": judging_criteria,
     })
 
     # Step 10: return ONLY the fields this agent sets

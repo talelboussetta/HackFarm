@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 
 from appwrite.input_file import InputFile
+from appwrite.id import ID
 
 from src.agents.state import ProjectState
 from src.appwrite_client import databases, storage, users_service
@@ -23,6 +24,16 @@ DB = settings.APPWRITE_DATABASE_ID
 
 async def github_agent(state: ProjectState) -> dict:
     job_id = state["job_id"]
+    try:
+        return await _github_agent_impl(state)
+    except Exception as e:
+        log.error(f"github_agent CRASHED: {type(e).__name__}: {e}", exc_info=True)
+        publish(job_id, "agent_failed", {"agent": "github_agent", "error": f"Unexpected: {e}"})
+        return {"errors": state.get("errors", []) + [f"github_agent: {type(e).__name__}: {e}"]}
+
+
+async def _github_agent_impl(state: ProjectState) -> dict:
+    job_id = state["job_id"]
     user_id = state["user_id"]
 
     # Step 1: publish agent_start
@@ -35,7 +46,7 @@ async def github_agent(state: ProjectState) -> dict:
     # Step 2: create AgentRun document
     agent_run_id = None
     try:
-        doc = databases.create_document(DB, "agent-runs", "unique()", {
+        doc = databases.create_document(DB, "agent-runs", ID.unique(), {
             "jobId": job_id,
             "agentName": "github_agent",
             "status": "running",
@@ -83,6 +94,11 @@ async def github_agent(state: ProjectState) -> dict:
             except Exception:
                 pass
         return {"errors": state.get("errors", []) + [error_msg]}
+
+    publish(job_id, "agent_thinking", {
+        "agent": "github_agent",
+        "message": f"Retrieved GitHub token for user, creating repo...",
+    })
 
     client = GitHubClient(token, username)
     repo_name = state.get("repo_name", state.get("project_name", "hackathon-project"))
@@ -152,13 +168,22 @@ async def github_agent(state: ProjectState) -> dict:
             "errors": state.get("errors", []) + [error_msg],
         }
 
+    publish(job_id, "agent_thinking", {
+        "agent": "github_agent",
+        "message": f"✓ Pushed {len(all_files)} files to {full_name} (commit: {commit_sha[:8] if commit_sha else '?'})",
+    })
+
     # Step 6: build ZIP and upload to Appwrite Storage
+    publish(job_id, "agent_thinking", {
+        "agent": "github_agent",
+        "message": "Building ZIP archive...",
+    })
     zip_file_id = None
     try:
         zip_bytes = build_zip(job_id, all_files)
         result = storage.create_file(
             bucket_id=settings.APPWRITE_ZIP_BUCKET_ID,
-            file_id="unique()",
+            file_id=ID.unique(),
             file=InputFile.from_bytes(zip_bytes, filename=f"{repo_name}.zip"),
         )
         zip_file_id = result["$id"]

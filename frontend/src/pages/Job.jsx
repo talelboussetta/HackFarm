@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight } from 'lucide-react'
+import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight, Trash2, XCircle } from 'lucide-react'
 import { useJobStream } from '../hooks/useJobStream'
+import { useAuth } from '../hooks/useAuth'
+import { api } from '../lib/api'
 import AgentPipelineGraph from '../components/AgentPipelineGraph'
 import AgentDrawer from '../components/AgentDrawer'
 import Lottie from 'lottie-react'
@@ -97,6 +99,7 @@ export default function Job() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { agentStates, jobStatus, result, businessContent } = useJobStream(id)
+  const { getJWT } = useAuth()
 
   const [selectedNode, setSelectedNode] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
@@ -104,6 +107,7 @@ export default function Job() {
   const [confettiFired, setConfettiFired] = useState(false)
   const [copied, setCopied] = useState(false)
   const [elapsed, setElapsed] = useState(0)
+  const [deleting, setDeleting] = useState(false)
   const startTime = useRef(Date.now())
 
   // Elapsed timer
@@ -159,6 +163,20 @@ export default function Job() {
   const handleCopyUrl = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000) }
   const handleDownload = () => { window.open(`/api/downloads/${id}`, '_blank') }
 
+  const handleDelete = async () => {
+    const label = jobStatus === 'running' || jobStatus === 'queued' ? 'Cancel this running job' : 'Delete this project'
+    if (!confirm(`${label}? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      const jwt = await getJWT()
+      await api(`/api/jobs/${id}`, { method: 'DELETE' }, jwt)
+      navigate('/history')
+    } catch (e) {
+      console.error('Delete failed:', e)
+      setDeleting(false)
+    }
+  }
+
   const handleNodeClick = (agentKey) => {
     if (window.innerWidth < 768) {
       setSelectedNode(agentKey)
@@ -167,12 +185,23 @@ export default function Job() {
     }
   }
   if (jobStatus === 'failed') {
+    const failedAgents = AGENT_KEYS.filter(k => agentStates[k]?.status === 'failed')
     return (
       <div className="flex flex-col items-center justify-center py-24 space-y-6">
-        <div className="p-6 rounded-2xl bg-red-500/10 border border-red-500/20 max-w-md text-center space-y-4">
+        <div className="p-6 rounded-2xl bg-red-500/10 border border-red-500/20 max-w-lg text-center space-y-4">
           <AlertCircle size={48} className="text-red-400 mx-auto" />
           <h2 className="text-xl font-bold text-red-400">Pipeline Failed</h2>
           <p className="text-sm text-white/60">{result?.error || 'An unexpected error occurred during generation.'}</p>
+          {failedAgents.length > 0 && (
+            <div className="text-left space-y-2 pt-2 border-t border-white/10">
+              <p className="text-xs text-white/40 uppercase tracking-wider">Failed agents:</p>
+              {failedAgents.map(k => (
+                <div key={k} className="text-xs text-red-300/70 font-mono bg-red-500/5 rounded px-3 py-2">
+                  <span className="text-red-400 font-semibold">{k}</span>: {agentStates[k]?.message || 'Unknown error'}
+                </div>
+              ))}
+            </div>
+          )}
           <Button onClick={() => navigate('/')} variant="secondary">Try Again</Button>
         </div>
       </div>
@@ -209,7 +238,7 @@ export default function Job() {
           })}
         </div>
 
-        {/* Timer + status */}
+        {/* Timer + status + delete */}
         <div className="flex items-center gap-3 text-sm">
           <span className="text-white/40 tabular-nums font-mono text-xs">{formatTime(elapsed)}</span>
           <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
@@ -217,6 +246,20 @@ export default function Job() {
           }`}>
             {jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'}
           </span>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white/40 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
+            title={jobStatus === 'running' ? 'Cancel job' : 'Delete project'}
+          >
+            {deleting ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : jobStatus === 'running' || jobStatus === 'queued' ? (
+              <><XCircle size={12} /> Cancel</>
+            ) : (
+              <><Trash2 size={12} /> Delete</>
+            )}
+          </button>
         </div>
       </div>
 

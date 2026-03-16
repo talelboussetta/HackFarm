@@ -14,6 +14,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from appwrite.query import Query
+from appwrite.id import ID
 
 from src.core.encryption import encrypt, decrypt
 from src.api.dependencies import get_current_user
@@ -112,7 +113,7 @@ async def upsert_key(
         )
     else:
         updated = databases.create_document(
-            db_id, "user-api-keys", "unique()",
+            db_id, "user-api-keys", ID.unique(),
             {
                 "userId": user["id"],
                 "provider": body.provider,

@@ -11,6 +11,7 @@ import re
 from datetime import datetime, timezone
 
 from src.agents.state import ProjectState
+from appwrite.id import ID
 from src.appwrite_client import databases
 from src.core.config import settings
 from src.core.events import publish
@@ -144,6 +145,16 @@ def _check_api_endpoints(files: dict, api_contracts: dict) -> list[str]:
 
 async def validator(state: ProjectState) -> dict:
     job_id = state["job_id"]
+    try:
+        return await _validator_impl(state)
+    except Exception as e:
+        log.error(f"validator CRASHED: {type(e).__name__}: {e}", exc_info=True)
+        publish(job_id, "agent_failed", {"agent": "validator", "error": f"Unexpected: {e}"})
+        return {"errors": state.get("errors", []) + [f"validator: {type(e).__name__}: {e}"]}
+
+
+async def _validator_impl(state: ProjectState) -> dict:
+    job_id = state["job_id"]
 
     # Step 1: publish agent_start
     publish(job_id, "agent_start", {
@@ -155,7 +166,7 @@ async def validator(state: ProjectState) -> dict:
     # Step 2: create AgentRun document
     agent_run_id = None
     try:
-        doc = databases.create_document(DB, "agent-runs", "unique()", {
+        doc = databases.create_document(DB, "agent-runs", ID.unique(), {
             "jobId": job_id,
             "agentName": "validator",
             "status": "running",
@@ -175,22 +186,51 @@ async def validator(state: ProjectState) -> dict:
     # Check 1: Python syntax
     publish(job_id, "agent_thinking", {
         "agent": "validator",
-        "message": "Running syntax checks...",
+        "message": f"Checking Python syntax across {sum(1 for k in generated_files if k.endswith('.py'))} files...",
     })
     syntax_passed, syntax_issues = _check_python_syntax(generated_files)
     all_issues.extend(syntax_issues)
+    publish(job_id, "agent_thinking", {
+        "agent": "validator",
+        "message": f"Syntax: {syntax_passed} passed, {len(syntax_issues)} errors" if syntax_issues else f"✓ Syntax: all {syntax_passed} Python files valid",
+    })
 
     # Check 2: Python imports vs requirements.txt
+    publish(job_id, "agent_thinking", {
+        "agent": "validator",
+        "message": "Checking Python imports vs requirements.txt...",
+    })
     import_issues = _check_python_imports(generated_files)
     all_issues.extend(import_issues)
+    publish(job_id, "agent_thinking", {
+        "agent": "validator",
+        "message": f"⚠️ Import issues: {len(import_issues)}" if import_issues else "✓ All imports satisfied by requirements.txt",
+    })
 
     # Check 3: JSX imports
+    jsx_count = sum(1 for k in generated_files if k.endswith('.jsx') or k.endswith('.js'))
+    publish(job_id, "agent_thinking", {
+        "agent": "validator",
+        "message": f"Checking JSX imports across {jsx_count} files...",
+    })
     jsx_issues = _check_jsx_imports(generated_files)
     all_issues.extend(jsx_issues)
+    publish(job_id, "agent_thinking", {
+        "agent": "validator",
+        "message": f"⚠️ JSX import issues: {len(jsx_issues)}" if jsx_issues else f"✓ All JSX imports resolve correctly",
+    })
 
     # Check 4: API endpoint consistency
+    publish(job_id, "agent_thinking", {
+        "agent": "validator",
+        "message": f"Checking API endpoint consistency ({len(api_contracts)} contracts)...",
+    })
     endpoint_issues = _check_api_endpoints(generated_files, api_contracts)
     all_issues.extend(endpoint_issues)
+    publish(job_id, "agent_thinking", {
+        "agent": "validator",
+        "message": f"⚠️ Endpoint mismatches: {len(endpoint_issues)}" if endpoint_issues else "✓ All frontend API calls match contracts",
+    })
 
     # Score calculation: start at 100, deduct per issue type
     score = 100
@@ -202,6 +242,11 @@ async def validator(state: ProjectState) -> dict:
 
     # Deduplicate issues
     all_issues = list(dict.fromkeys(all_issues))
+
+    publish(job_id, "agent_thinking", {
+        "agent": "validator",
+        "message": f"Final score: {score}/100 | Issues: {len(all_issues)} (syntax:{len(syntax_issues)} imports:{len(import_issues)} jsx:{len(jsx_issues)} endpoints:{len(endpoint_issues)})",
+    })
 
     # Step 3: update AgentRun + publish agent_done
     if agent_run_id:
@@ -217,6 +262,9 @@ async def validator(state: ProjectState) -> dict:
     publish(job_id, "agent_done", {
         "agent": "validator",
         "summary": f"Score: {score}/100, {len(all_issues)} issues found",
+        "validation_score": score,
+        "issue_count": len(all_issues),
+        "issues": all_issues[:10],
     })
 
     return {

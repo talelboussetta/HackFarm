@@ -1,9 +1,10 @@
 import json
 import logging
 from datetime import datetime, timezone
+from appwrite.id import ID
+from appwrite.query import Query
 from src.appwrite_client import databases
 from src.core.config import settings
-from appwrite.query import Query
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ def publish(job_id: str, event_type: str, payload: dict) -> None:
         databases.create_document(
             database_id=db_id,
             collection_id="job-events",
-            document_id="unique()",
+            document_id=ID.unique(),
             data={
                 "jobId": job_id,
                 "eventType": event_type,
@@ -35,7 +36,7 @@ def publish(job_id: str, event_type: str, payload: dict) -> None:
             }
         )
     except Exception as e:
-        log.warning(f"Event write failed (non-fatal) job={job_id}: {e}")
+        log.error(f"Event write FAILED job={job_id}: {type(e).__name__}: {e}")
 
     # 2. Update agent-runs tracking table
     agent_name = payload.get("agent")
@@ -70,6 +71,6 @@ def publish(job_id: str, event_type: str, payload: dict) -> None:
                     "runDuration": 0,
                     "outputFormat": "json",
                 })
-                databases.create_document(db_id, "agent-runs", "unique()", data)
+                databases.create_document(db_id, "agent-runs", ID.unique(), data)
         except Exception as e:
             log.warning(f"Agent-run sync failed (non-fatal) agent={agent_name}: {e}")

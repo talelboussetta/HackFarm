@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import asyncio, logging, re
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from appwrite.query import Query
+from appwrite.id import ID
 from src.api.dependencies import get_current_user
 from src.appwrite_client import databases, storage
 from src.core.config import settings
@@ -68,7 +69,7 @@ async def create_job(
     if not can_run_job(user["id"]):
         # Create a queued job
         job = databases.create_document(
-            DB, "jobs", "unique()",
+            DB, "jobs", ID.unique(),
             {
                 "userId": user["id"],
                 "status": "queued",
@@ -85,7 +86,7 @@ async def create_job(
 
     # Create job with status="running"
     job = databases.create_document(
-        DB, "jobs", "unique()",
+        DB, "jobs", ID.unique(),
         {
             "userId": user["id"],
             "status": "running",
@@ -189,7 +190,7 @@ async def delete_job(
     job_id: str,
     user: dict = Depends(get_current_user),
 ):
-    """Cancel or soft-delete a job."""
+    """Cancel a running job or delete a completed/failed job."""
     try:
         job = databases.get_document(DB, "jobs", job_id)
     except Exception:
@@ -199,14 +200,39 @@ async def delete_job(
         raise HTTPException(403, "Not your job")
 
     if job["status"] in ("queued", "running"):
+        # Cancel: mark as failed so the pipeline stops
         databases.update_document(DB, "jobs", job_id, {
             "status": "failed",
             "errorMessage": "Cancelled by user"
         })
-    else:
-        databases.update_document(DB, "jobs", job_id, {
-            "errorMessage": "Deleted by user"
-        })
+
+    # Delete the job document
+    try:
+        databases.delete_document(DB, "jobs", job_id)
+    except Exception as e:
+        log.warning(f"Could not delete job document {job_id}: {e}")
+
+    # Clean up related events (best-effort)
+    try:
+        events = databases.list_documents(DB, "job-events", [Query.equal("jobId", job_id), Query.limit(100)])
+        for doc in events["documents"]:
+            try:
+                databases.delete_document(DB, "job-events", doc["$id"])
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Clean up agent-runs (best-effort)
+    try:
+        runs = databases.list_documents(DB, "agent-runs", [Query.equal("jobId", job_id), Query.limit(50)])
+        for doc in runs["documents"]:
+            try:
+                databases.delete_document(DB, "agent-runs", doc["$id"])
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     return {"deleted": True}
 
@@ -218,6 +244,8 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
   async with GlobalSemaphore():
     try:
       providers = get_user_llm_providers(user_id)
+      if not providers:
+          raise ValueError("No valid LLM API keys found. Add keys in Settings and try again.")
       llm = LLMRouter(providers)
       # Build initial state
       state = normalize_to_initial_state(raw_text, input_type, job_id, user_id)
@@ -229,20 +257,28 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
       result = await pipeline.ainvoke(state)
 
       final_status = "partial" if result.get("errors") else "complete"
+      error_msg = "; ".join(result.get("errors", [])[:3]) if result.get("errors") else None
       databases.update_document(DB, "jobs", job_id, {
           "status": final_status,
           "githubUrl": result.get("github_url", ""),
           "completedAt": datetime.now(timezone.utc).isoformat(),
-          "errorMessage": "; ".join(result.get("errors", [])[:3]) if result.get("errors") else None
+          "errorMessage": error_msg
       })
+      # Only emit job_failed for partial — github_agent already emits job_complete on success
+      if final_status == "partial":
+          publish(job_id, "job_failed", {"error": error_msg or "Some agents failed", "last_agent": "unknown"})
     except Exception as e:
-      log.error(f"Pipeline failed job={job_id}: {e}", exc_info=True)
-      databases.update_document(DB, "jobs", job_id, {
-          "status": "failed",
-          "errorMessage": str(e)[:500],
-          "completedAt": datetime.now(timezone.utc).isoformat()
-      })
-      publish(job_id, "job_failed", {"error": str(e)[:200], "last_agent": "unknown"})
+      log.error(f"Pipeline failed job={job_id}: {type(e).__name__}: {e}", exc_info=True)
+      error_str = f"{type(e).__name__}: {str(e)[:400]}"
+      publish(job_id, "job_failed", {"error": error_str, "last_agent": "unknown"})
+      try:
+          databases.update_document(DB, "jobs", job_id, {
+              "status": "failed",
+              "errorMessage": error_str,
+              "completedAt": datetime.now(timezone.utc).isoformat()
+          })
+      except Exception:
+          pass
     finally:
       try:
         from src.integrations.n8n import fire_webhook

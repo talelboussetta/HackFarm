@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, FileCode2, Brain, Terminal } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, FileCode2, Brain, Terminal, ScrollText } from 'lucide-react'
 import { AGENT_THEMES } from '../config/agentThemes'
 import { useJobStream } from '../hooks/useJobStream'
 import ParticleField from '../components/ParticleField'
@@ -13,6 +13,156 @@ const AGENT_KEYS = [
   'analyst', 'architect', 'frontend_agent', 'backend_agent',
   'business_agent', 'integrator', 'validator', 'github_agent',
 ]
+
+const AGENT_PROMPTS = {
+  analyst: `You are a senior product analyst. Your task is to read a hackathon project 
+specification and extract structured information that a development team will 
+use to build the project.
+
+INPUT:
+Project specification text:
+{raw_text}
+
+RULES:
+1. Extract only information explicitly stated or clearly implied in the spec.
+2. If the spec does not mention a judging criterion, leave judging_criteria empty.
+3. mvp_features must be implementable in a hackathon timeframe (1-3 days).
+4. domain must be one of: fintech, health, education, productivity, sustainability, 
+   social, developer-tools, ecommerce, logistics, entertainment, other.
+5. project_name should be 2-4 words, memorable, reflects the core value proposition.
+
+OUTPUT SCHEMA:
+{
+  "project_name": string,
+  "problem_statement": string,
+  "mvp_features": [string],
+  "nice_to_have": [string],
+  "judging_criteria": [string],
+  "constraints": [string],
+  "domain": string,
+  "target_users": string
+}`,
+  architect: `You are a senior software architect. Your task is to design a minimal, 
+implementable system architecture for a hackathon project.
+
+INPUT:
+Project name: {project_name}
+Core features: {mvp_features}
+Constraints: {constraints}
+Domain: {domain}
+
+RULES:
+1. Choose the simplest stack that delivers the features. Never over-engineer.
+2. API contracts must be complete: every endpoint needs request/response shapes.
+3. component_map lists file paths only. Paths use forward slashes.
+4. Frontend paths start with "frontend/src/". Backend paths start with "backend/".
+5. Maximum 8 API endpoints for an MVP.
+6. database_schema must match what the backend can implement in a day.
+
+OUTPUT SCHEMA:
+{
+  "tech_stack": { "frontend": string, "backend": string, "database": string, "auth": string },
+  "api_contracts": { "POST /api/[resource]": { ... } },
+  "component_map": { "frontend": [...], "backend": [...] },
+  "database_schema": { "table_name": { "field": "type" } },
+  "rationale": string
+}`,
+  frontend_agent: `You are a senior React developer. Your task is to generate production-quality
+frontend code for a hackathon project.
+
+INPUT:
+API contracts (the ONLY endpoints you may call): {api_contracts}
+Component map (generate ONLY these files): {component_map}
+Tech stack: {tech_stack}
+
+RULES:
+1. Generate ONLY the files listed in the component map above.
+2. Every API call must use EXACTLY the endpoint paths from api_contracts.
+3. Do NOT invent any endpoint that is not in api_contracts.
+4. All imports must be relative.
+5. Use fetch() for all API calls with credentials: "include".
+6. No TypeScript — pure JavaScript/JSX only.
+7. Each component should be a default export.
+8. Include basic CSS-in-JS or className styling for a presentable UI.
+
+OUTPUT SCHEMA:
+{
+  "files": {
+    "frontend/src/App.jsx": "// full file content",
+    "frontend/src/components/Example.jsx": "// full file content"
+  }
+}`,
+  backend_agent: `You are a senior FastAPI developer. Your task is to generate production-quality
+Python backend code for a hackathon project.
+
+INPUT:
+API contracts (implement ONLY these endpoints): {api_contracts}
+Database schema: {database_schema}
+Component map (generate ONLY these files): {component_map}
+Tech stack: {tech_stack}
+
+RULES:
+1. Implement ONLY the endpoints defined in api_contracts above.
+2. Request and response shapes must EXACTLY match the api_contracts schemas.
+3. SQLAlchemy models must match database_schema exactly.
+4. Use async def for all route handlers.
+5. Include proper error handling with HTTPException.
+6. main.py must include CORS middleware allowing all origins.
+7. Include a health check endpoint at GET /api/health.
+
+OUTPUT SCHEMA:
+{
+  "files": {
+    "backend/main.py": "# full file content",
+    "backend/models.py": "# full file content"
+  }
+}`,
+  business_agent: `You are a senior technical writer and pitch strategist. Your task is to generate
+three deliverables for a hackathon project in a single response.
+
+INPUT:
+Project name: {project_name}
+Problem statement: {problem_statement}
+MVP features: {mvp_features}
+Judging criteria: {judging_criteria}
+Tech stack: {tech_stack}
+
+DELIVERABLE 1 — README (markdown)
+DELIVERABLE 2 — Pitch slides (6-8 slides with title, content, notes)
+DELIVERABLE 3 — Architecture diagram (valid Mermaid "graph TD" syntax)
+
+OUTPUT SCHEMA:
+{
+  "readme_content": "# Project Name\\n\\nFull markdown README...",
+  "pitch_slides": [{"title": "...", "content": "...", "notes": "..."}],
+  "architecture_mermaid": "graph TD\\n  A[User] --> B[Frontend]..."
+}`,
+  integrator: `The Integrator agent does not use an LLM prompt.
+
+It programmatically merges all generated files from the frontend, backend, and business agents
+into a unified project structure. It:
+• Combines component_map outputs into a single file tree
+• Validates that all API contracts are satisfied
+• Generates package.json, requirements.txt, and config files
+• Optionally runs a coherence check via LLM to verify endpoint alignment`,
+  validator: `The Validator agent does not use an LLM prompt.
+
+It runs automated quality checks on the merged project:
+• File completeness: are all planned files present?
+• Import resolution: do all imports reference existing files?
+• Endpoint coverage: does the backend implement all API contracts?
+• Schema consistency: do request/response shapes match?
+• README & docs: are business deliverables present?
+
+Each check produces a score and list of issues, combined into a final validation score (0-100).`,
+  github_agent: `The GitHub agent does not use an LLM prompt.
+
+It handles deployment of the generated project:
+• Creates a new GitHub repository (public or private)
+• Commits all generated files with a structured commit message
+• Builds a downloadable ZIP archive of the project
+• Returns the repository URL and commit SHA`,
+}
 
 function FigurineOrb({ accentColor }) {
   return (
@@ -126,9 +276,100 @@ function ScoreCounter({ score }) {
   return <>{typeof displayed === 'number' ? displayed.toFixed(1) : '—'}</>
 }
 
+/** Renders structured data extracted by each agent */
+function AgentStructuredData({ agentKey, data, theme }) {
+  if (!data) return null
+
+  const renderList = (items, color) => {
+    if (!items || !Array.isArray(items) || items.length === 0) return null
+    return items.map((item, i) => (
+      <div key={i} style={{
+        display: 'flex', alignItems: 'flex-start', gap: 8,
+        padding: '4px 0', fontSize: 11, color: 'rgba(255,255,255,0.6)',
+      }}>
+        <span style={{ color, flexShrink: 0, fontSize: 9, marginTop: 3 }}>●</span>
+        <span>{typeof item === 'string' ? item : item.title || JSON.stringify(item)}</span>
+      </div>
+    ))
+  }
+
+  const renderSection = (label, content) => (
+    <div style={{ padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: theme.accentColor, marginBottom: 6 }}>
+        {label}
+      </div>
+      {content}
+    </div>
+  )
+
+  // Agent-specific structured displays
+  if (agentKey === 'analyst') {
+    return (
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 4 }}>
+        {data.project_name && renderSection('Project', (
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{data.project_name}</div>
+        ))}
+        {data.domain && renderSection('Domain', (
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: `${theme.accentColor}22`, color: theme.accentColor }}>{data.domain}</span>
+        ))}
+        {data.mvp_features && renderSection(`MVP Features (${data.mvp_features.length})`, renderList(data.mvp_features, '#22c55e'))}
+        {data.constraints && data.constraints.length > 0 && renderSection('Constraints', renderList(data.constraints, '#f59e0b'))}
+        {data.judging_criteria && data.judging_criteria.length > 0 && renderSection('Judging Criteria', renderList(data.judging_criteria, '#8b5cf6'))}
+      </div>
+    )
+  }
+
+  if (agentKey === 'architect') {
+    return (
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 4 }}>
+        {data.tech_stack && renderSection('Tech Stack', (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {Object.entries(data.tech_stack).map(([k, v]) => (
+              <span key={k} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.7)' }}>
+                {k}: {v}
+              </span>
+            ))}
+          </div>
+        ))}
+        {data.api_endpoints && renderSection(`Endpoints (${data.api_endpoints.length})`, renderList(data.api_endpoints, '#3b82f6'))}
+        {data.database_tables && data.database_tables.length > 0 && renderSection('DB Tables', renderList(data.database_tables, '#06b6d4'))}
+      </div>
+    )
+  }
+
+  if (agentKey === 'validator') {
+    return (
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 4 }}>
+        {data.validation_score !== undefined && renderSection('Score', (
+          <div style={{ fontSize: 24, fontWeight: 800, color: data.validation_score >= 70 ? '#22c55e' : data.validation_score >= 40 ? '#f59e0b' : '#ef4444' }}>
+            {data.validation_score}/100
+          </div>
+        ))}
+        {data.issues && data.issues.length > 0 && renderSection(`Issues (${data.issue_count || data.issues.length})`, renderList(data.issues, '#ef4444'))}
+      </div>
+    )
+  }
+
+  // Generic fallback for other agents
+  const summary = data.summary
+  const filesGen = data.files_generated
+  if (summary || filesGen) {
+    return (
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 4 }}>
+        {summary && renderSection('Summary', (
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{summary}</div>
+        ))}
+        {filesGen && filesGen.length > 0 && renderSection(`Generated (${filesGen.length})`, renderList(filesGen.map(f => f.split('/').pop()), theme.accentColor))}
+      </div>
+    )
+  }
+
+  return null
+}
+
 /** IDE-like output panel for the right side of the hero */
 function IDEOutputPanel({ files, events, agentKey, theme, status, agentState }) {
-  const [activeTab, setActiveTab] = useState('files')
+  const [activeTab, setActiveTab] = useState('output')
   const logsEndRef = useRef(null)
 
   const knowledgeItems = useMemo(() => {
@@ -147,13 +388,17 @@ function IDEOutputPanel({ files, events, agentKey, theme, status, agentState }) 
       .filter(k => k.message)
   }, [events])
 
+  // Extract structured data from agentState.agentData
+  const agentData = agentState?.agentData || null
+
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [knowledgeItems])
 
   const tabs = [
+    { id: 'output', label: 'Output', icon: Brain, count: knowledgeItems.length },
     { id: 'files', label: 'Files', icon: FileCode2, count: files.length },
-    { id: 'knowledge', label: 'Output', icon: Brain, count: knowledgeItems.length },
+    { id: 'prompt', label: 'Prompt', icon: ScrollText, count: null },
     { id: 'logs', label: 'Logs', icon: Terminal, count: events.length },
   ]
 
@@ -306,12 +551,22 @@ function IDEOutputPanel({ files, events, agentKey, theme, status, agentState }) 
           </div>
         )}
 
-        {/* Knowledge/Output tab */}
-        {activeTab === 'knowledge' && (
+        {/* Output tab — shows thought process + structured data */}
+        {activeTab === 'output' && (
           <div style={{ padding: '8px 0' }}>
+            {/* Structured agent data (when available) */}
+            {agentData && (
+              <AgentStructuredData agentKey={agentKey} data={agentData} theme={theme} />
+            )}
+
             {knowledgeItems.length === 0 ? (
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>
-                No output captured yet
+                {status === 'running' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <Loader2 size={18} style={{ color: theme.accentColor, animation: 'spin 1s linear infinite' }} />
+                    <span>Waiting for agent output...</span>
+                  </div>
+                ) : 'No output captured yet'}
               </div>
             ) : (
               knowledgeItems.map((item, i) => {
@@ -358,6 +613,31 @@ function IDEOutputPanel({ files, events, agentKey, theme, status, agentState }) 
                 )
               })
             )}
+          </div>
+        )}
+
+        {/* Prompt tab */}
+        {activeTab === 'prompt' && (
+          <div style={{ padding: '12px 16px', overflow: 'auto' }}>
+            <div style={{
+              fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
+              color: theme.accentColor, marginBottom: 12,
+            }}>
+              System Prompt — {agentKey.replace('_', ' ')}
+            </div>
+            <pre style={{
+              fontSize: 11, lineHeight: 1.7, color: 'rgba(255,255,255,0.6)',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
+              fontFamily: "'JetBrains Mono', monospace",
+              background: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: 12,
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}>
+              {(AGENT_PROMPTS[agentKey] || 'No prompt template available for this agent.').split(/(\{[^}]+\})/).map((part, i) =>
+                part.startsWith('{') && part.endsWith('}')
+                  ? <span key={i} style={{ color: theme.accentColor, fontWeight: 600 }}>{part}</span>
+                  : <span key={i}>{part}</span>
+              )}
+            </pre>
           </div>
         )}
 

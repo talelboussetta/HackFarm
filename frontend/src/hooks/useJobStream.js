@@ -38,16 +38,19 @@ export function useJobStream(jobId) {
   function handleEvent(type, payload) {
     const agentTypes = ['agent_start','agent_thinking','agent_done','agent_failed']
     if (agentTypes.includes(type)) {
-      setAgentStates(prev => ({
-        ...prev,
-        [payload.agent]: {
+      setAgentStates(prev => {
+        const existing = prev[payload.agent] || {}
+        const newState = {
           status: type === 'agent_start' ? 'running'
                 : type === 'agent_done' ? 'done'
                 : type === 'agent_failed' ? 'failed' : 'running',
-          message: payload.message || payload.summary || '',
-          files: payload.files_generated || []
+          message: payload.message || payload.summary || payload.error || '',
+          files: payload.files_generated || existing.files || [],
+          // Carry rich data from agent_done payloads
+          agentData: type === 'agent_done' ? { ...payload } : (existing.agentData || null),
         }
-      }))
+        return { ...prev, [payload.agent]: newState }
+      })
       if (type === 'agent_done' && payload.agent === 'business_agent') {
         setBusinessContent({
           readme_content: payload.readme_content || '',
@@ -57,7 +60,7 @@ export function useJobStream(jobId) {
       }
     }
     if (type === 'job_complete') { setJobStatus('complete'); setResult(payload) }
-    if (type === 'job_failed')   { setJobStatus('failed') }
+    if (type === 'job_failed')   { setJobStatus('failed'); setResult(payload) }
   }
 
   return { agentStates, jobStatus, result, businessContent }

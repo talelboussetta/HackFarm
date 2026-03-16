@@ -8,9 +8,11 @@ import ast
 import json
 import logging
 import re
+import asyncio
 from datetime import datetime, timezone
 
 from src.agents.state import ProjectState
+from appwrite.id import ID
 from src.appwrite_client import databases
 from src.core.config import settings
 from src.core.events import publish
@@ -210,6 +212,16 @@ services:
 
 async def integrator(state: ProjectState) -> dict:
     job_id = state["job_id"]
+    try:
+        return await _integrator_impl(state)
+    except Exception as e:
+        log.error(f"integrator CRASHED: {type(e).__name__}: {e}", exc_info=True)
+        publish(job_id, "agent_failed", {"agent": "integrator", "error": f"Unexpected: {e}"})
+        return {"errors": state.get("errors", []) + [f"integrator: {type(e).__name__}: {e}"]}
+
+
+async def _integrator_impl(state: ProjectState) -> dict:
+    job_id = state["job_id"]
 
     # Step 1: publish agent_start
     publish(job_id, "agent_start", {
@@ -221,7 +233,7 @@ async def integrator(state: ProjectState) -> dict:
     # Step 2: create AgentRun document
     agent_run_id = None
     try:
-        doc = databases.create_document(DB, "agent-runs", "unique()", {
+        doc = databases.create_document(DB, "agent-runs", ID.unique(), {
             "jobId": job_id,
             "agentName": "integrator",
             "status": "running",
@@ -241,7 +253,7 @@ async def integrator(state: ProjectState) -> dict:
 
     publish(job_id, "agent_thinking", {
         "agent": "integrator",
-        "message": "Checking import consistency...",
+        "message": f"Scanning {len(existing_files)} generated files for dependencies...",
     })
 
     # Step 3: generate infrastructure files (never overwrite existing)
@@ -267,7 +279,13 @@ async def integrator(state: ProjectState) -> dict:
         "message": f"Generating dependency files... ({len(infra_files)} files)",
     })
 
-    # Step 4: optional LLM check for endpoint mismatches
+    infra_list = list(infra_files.keys())
+    publish(job_id, "agent_thinking", {
+        "agent": "integrator",
+        "message": f"Generated: {', '.join(infra_list)}",
+    })
+
+    # Step 4: optional LLM check for endpoint mismatches (with timeout)
     if state.get("llm") and api_contracts:
         fe_files_content = {
             k: v[:2000] for k, v in existing_files.items()
@@ -275,18 +293,38 @@ async def integrator(state: ProjectState) -> dict:
         }
         if fe_files_content:
             try:
+                publish(job_id, "agent_thinking", {
+                    "agent": "integrator",
+                    "message": "Running endpoint consistency check via LLM...",
+                })
                 check_prompt = (
                     f"Given these api_contracts: {json.dumps(list(api_contracts.keys()))}\n"
                     f"And these frontend file snippets:\n{json.dumps(fe_files_content, indent=2)}\n\n"
                     "List any fetch/API endpoint path called in the frontend that is NOT "
                     "in api_contracts. Return a JSON array of strings. If none, return []."
                 )
-                check_raw = await state["llm"].complete(check_prompt, response_format="json")
+                check_raw = await asyncio.wait_for(
+                    state["llm"].complete(check_prompt, response_format="json", agent_name="integrator"),
+                    timeout=60,
+                )
                 mismatches = json.loads(check_raw)
                 if isinstance(mismatches, list) and mismatches:
                     log.warning(f"Endpoint mismatches found: {mismatches}")
-            except Exception:
-                pass  # Non-critical — don't fail the agent
+                    publish(job_id, "agent_thinking", {
+                        "agent": "integrator",
+                        "message": f"⚠️ Endpoint mismatches: {', '.join(mismatches[:3])}",
+                    })
+                else:
+                    publish(job_id, "agent_thinking", {
+                        "agent": "integrator",
+                        "message": "✓ All frontend API calls match backend contracts",
+                    })
+            except (asyncio.TimeoutError, Exception) as e:
+                log.warning(f"Integrator LLM check failed: {e}")
+                publish(job_id, "agent_thinking", {
+                    "agent": "integrator",
+                    "message": "Endpoint check skipped (LLM unavailable)",
+                })
 
     file_count = len(infra_files)
 
@@ -304,6 +342,7 @@ async def integrator(state: ProjectState) -> dict:
     publish(job_id, "agent_done", {
         "agent": "integrator",
         "summary": f"Added {file_count} dependency files",
+        "files_generated": infra_list,
     })
 
     return {"generated_files": infra_files}
