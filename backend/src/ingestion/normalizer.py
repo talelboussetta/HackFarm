@@ -48,4 +48,6 @@ def normalize_to_initial_state(
         "errors": [],
         "status": "running",
         "github_url": None,
+        "repo_name": "",
+        "repo_private": False,
     }

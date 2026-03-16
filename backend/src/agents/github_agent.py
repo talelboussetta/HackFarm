@@ -58,9 +58,15 @@ async def github_agent(state: ProjectState) -> dict:
         )
         if not github_identity:
             raise ValueError("No GitHub identity found for user")
-        token = github_identity["providerAccessToken"]
+        token = github_identity.get("providerAccessToken", "")
+        if not token:
+            raise ValueError(
+                "GitHub token not available — user must re-authenticate "
+                "with GitHub OAuth scope including repo access."
+            )
         appwrite_user = users_service.get(user_id)
-        username = appwrite_user.get("name", "").replace(" ", "").lower() or user_id
+        raw_name = appwrite_user.get("name", "").strip()
+        username = raw_name.split()[0].lower() if raw_name else user_id[:20]
     except Exception as e:
         error_msg = f"github_agent: Failed to retrieve GitHub credentials: {e}"
         publish(job_id, "agent_failed", {

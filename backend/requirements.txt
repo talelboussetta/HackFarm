@@ -6,11 +6,6 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 sse-starlette==2.2.1
 
-# Database
-sqlalchemy==2.0.36
-aiosqlite==0.20.0
-alembic==1.14.1
-
 # Auth & Security
 pyjwt==2.10.1
 cryptography==44.0.0

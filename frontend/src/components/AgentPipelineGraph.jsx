@@ -3,7 +3,7 @@ import {
   ReactFlow, Background, useNodesState, useEdgesState,
   Handle, Position
 } from '@xyflow/react'
-import '@xyflow/react/dist/base.css'
+import '@xyflow/react/dist/style.css'
 import Lottie from 'lottie-react'
 import agentRunningAnim from '../animations/agent-running.json'
 import agentDoneAnim from '../animations/agent-done.json'

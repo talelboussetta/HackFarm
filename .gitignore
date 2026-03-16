@@ -50,3 +50,6 @@ n8n_data/
 
 # Logs
 *.log
+#images
+images/
+frontend/src/animations/

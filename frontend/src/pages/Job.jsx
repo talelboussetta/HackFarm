@@ -1,10 +1,8 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight } from 'lucide-react'
 import { useJobStream } from '../hooks/useJobStream'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import AgentPipelineGraph from '../components/AgentPipelineGraph'
 import AgentDrawer from '../components/AgentDrawer'
 import Lottie from 'lottie-react'
@@ -13,16 +11,6 @@ import confetti from 'canvas-confetti'
 import Button from '../components/Button'
 
 const AGENT_KEYS = ['analyst','architect','frontend_agent','backend_agent','business_agent','integrator','validator','github_agent']
-
-function getLang(filename) {
-  if (!filename) return 'text'
-  if (filename.endsWith('.py'))   return 'python'
-  if (filename.endsWith('.jsx') || filename.endsWith('.js')) return 'jsx'
-  if (filename.endsWith('.json')) return 'json'
-  if (filename.endsWith('.yml') || filename.endsWith('.yaml')) return 'yaml'
-  if (filename.endsWith('.md'))   return 'markdown'
-  return 'text'
-}
 
 function Skeleton({ lines = 4 }) {
   return (
@@ -295,14 +283,25 @@ export default function Job() {
                 {/* Code viewer */}
                 <div className="w-[70%] overflow-auto">
                   {selectedFile ? (
-                    <SyntaxHighlighter
-                      language={getLang(selectedFile)}
-                      style={oneDark}
-                      customStyle={{ margin: 0, background: 'transparent', fontSize: '11px', minHeight: '100%' }}
-                      showLineNumbers
-                    >
-                      {`// File: ${selectedFile}\n// Content will be available after download`}
-                    </SyntaxHighlighter>
+                    jobStatus === 'complete' ? (
+                      <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-6">
+                        <div className="text-white/30 text-sm">
+                          <p className="text-white/50 font-medium mb-1">{selectedFile.split('/').pop()}</p>
+                          <p>File preview available after download</p>
+                        </div>
+                        {zipFileId && (
+                          <button onClick={handleDownload}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg text-sm hover:bg-blue-500/30 transition-colors">
+                            <Download size={14} /> Download ZIP
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full gap-3 text-center p-6">
+                        <Loader2 size={20} className="text-blue-400 animate-spin" />
+                        <p className="text-white/30 text-sm">Generating files...</p>
+                      </div>
+                    )
                   ) : (
                     <div className="flex items-center justify-center h-full text-white/20 text-sm">
                       Select a file to view

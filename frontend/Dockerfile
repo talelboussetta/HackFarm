@@ -1,8 +1,10 @@
-FROM node:20-slim
+FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json ./
+RUN apk add --no-cache git
+
+COPY package.json package-lock.json* ./
 RUN npm install
 
 COPY . .
