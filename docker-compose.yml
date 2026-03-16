@@ -8,10 +8,15 @@ services:
     volumes:
       - ./backend:/app
     env_file:
-      - ./backend/.env
+      - ./backend/.env          # copy backend/.env.example → backend/.env and fill in secrets
     command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on: []
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   frontend:
     build:
@@ -24,8 +29,9 @@ services:
       - /app/node_modules
     environment:
       - VITE_API_BASE_URL=http://backend:8000
-    env_file:
-      - ./frontend/.env.local
+      - VITE_APPWRITE_ENDPOINT=${VITE_APPWRITE_ENDPOINT:-https://cloud.appwrite.io/v1}
+      - VITE_APPWRITE_PROJECT_ID=${VITE_APPWRITE_PROJECT_ID}
+      - VITE_APPWRITE_DATABASE_ID=${VITE_APPWRITE_DATABASE_ID:-hackfarmer-db}
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     depends_on:
       - backend
@@ -41,9 +47,10 @@ services:
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=admin
-      - N8N_BASIC_AUTH_PASSWORD=changeme
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-changeme}
       - WEBHOOK_URL=http://localhost:5678/
     restart: unless-stopped
 
 volumes:
   n8n_data:
+

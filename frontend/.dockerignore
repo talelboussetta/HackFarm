@@ -1,5 +1,8 @@
 node_modules
 dist
 .env.local
+.env*.local
 .git
 .vscode
+*.log
+out.txt

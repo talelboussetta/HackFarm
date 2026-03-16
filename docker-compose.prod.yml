@@ -1,0 +1,16 @@
+# Production Docker Compose override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod   # multi-stage nginx build
+    ports:
+      - "80:80"
+    volumes: []                     # no volume mounts in prod
+    command: []                     # nginx handles it
+
+  backend:
+    volumes: []                     # no hot-reload mount in prod
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --workers 2
