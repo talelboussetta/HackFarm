@@ -28,7 +28,8 @@
     "@xyflow/react": "^12.4.0",
     "lottie-react": "^2.4.0",
     "canvas-confetti": "^1.9.3",
-    "@iconscout/react-unicons": "^2.0.2"
+    "@iconscout/react-unicons": "^2.0.2",
+    "@studio-freight/lenis": "^1.0.42"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
