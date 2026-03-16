@@ -6,6 +6,9 @@ import { Upload, MessageSquare, Zap, X, Github, Lock, Globe, AlertTriangle, Load
 import { useAuth } from '../hooks/useAuth'
 import { useJobSubmit } from '../hooks/useJobSubmit'
 import Button from '../components/Button'
+import Lottie from 'lottie-react'
+import heroAnim from '../animations/hero-ai.json'
+import submitAnim from '../animations/submit.json'
 
 export default function Home() {
   const navigate = useNavigate()
@@ -60,29 +63,39 @@ export default function Home() {
 
   return (
     <div className="space-y-10 max-w-3xl mx-auto">
-      {/* Hero */}
-      <section className="text-center space-y-4 pt-8">
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-4xl md:text-5xl font-bold tracking-tight"
-          style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+      {/* Hero — two-column */}
+      <section className="flex flex-col md:flex-row items-center gap-6 pt-6 md:pt-10">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="w-[200px] h-[200px] md:w-[320px] md:h-[320px] flex-shrink-0"
         >
-          Ship your hackathon project in minutes
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-lg text-white/40"
-        >
-          Upload a spec or describe your idea. AI builds the rest.
-        </motion.p>
+          <Lottie animationData={heroAnim} loop={true} autoplay={true} style={{ width: '100%', height: '100%' }} />
+        </motion.div>
+        <div className="text-center md:text-left flex-1">
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-4xl md:text-[52px] font-bold tracking-tight leading-tight"
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+          >
+            Ship your hackathon<br />project in minutes
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="text-lg text-white/40 mt-4"
+          >
+            Upload a spec or describe your idea. Seven AI agents build the rest.
+          </motion.p>
+        </div>
       </section>
 
       {/* Tabs */}
       <div className="space-y-6">
-        <div className="relative flex bg-white/5 rounded-lg p-1 border border-white/10">
+        <div className="relative flex bg-white/5 rounded-lg p-1" style={{ border: '1px solid rgba(255,255,255,0.12)' }}>
           {[{ id: 'upload', label: 'Upload spec', icon: Upload }, { id: 'describe', label: 'Describe it', icon: MessageSquare }].map(t => (
             <button
               key={t.id}
@@ -171,7 +184,8 @@ export default function Home() {
             exit={{ opacity: 0, height: 0 }}
             className="space-y-4 overflow-hidden"
           >
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-5">
+            <div className="p-6 rounded-2xl bg-[rgba(255,255,255,0.04)] backdrop-blur-xl border border-white/[0.08] space-y-5"
+                 style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)' }}>
               <div>
                 <label className="block text-sm text-white/60 mb-1.5">Repository name</label>
                 <input
@@ -248,11 +262,16 @@ export default function Home() {
           disabled={!canSubmit}
         >
           {loading ? (
-            <Loader2 size={20} className="animate-spin" />
+            <>
+              <Lottie animationData={submitAnim} loop={true} style={{ width: 28, height: 28 }} />
+              Generating...
+            </>
           ) : (
-            <Zap size={20} />
+            <>
+              <Zap size={20} />
+              Generate Project
+            </>
           )}
-          Generate Project
         </Button>
 
         <AnimatePresence>
@@ -267,6 +286,19 @@ export default function Home() {
             </motion.p>
           )}
         </AnimatePresence>
+
+        {/* Feature badges */}
+        <div className="flex items-center gap-3 mt-2">
+          {[
+            { icon: '🔒', label: 'Encrypted keys' },
+            { icon: '⚡', label: 'Real-time pipeline' },
+            { icon: '🐙', label: 'Auto GitHub push' },
+          ].map(b => (
+            <span key={b.label} className="flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-white/30">
+              <span>{b.icon}</span> {b.label}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   )

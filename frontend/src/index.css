@@ -14,15 +14,32 @@
   --accent-green: #22c55e;
   --accent-amber: #f59e0b;
   --accent-red: #ef4444;
-  --font-heading: 'Space Grotesk', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-heading: "Space Grotesk", sans-serif;
+  --font-body: "DM Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 body {
@@ -32,10 +49,119 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-heading);
 }
 
-code, pre {
+code,
+pre {
   font-family: var(--font-mono);
+}
+
+/* ── ReactFlow dark theme override ── */
+.react-flow__renderer,
+.react-flow__background,
+.react-flow {
+  background: transparent !important;
+}
+
+.react-flow__pane {
+  cursor: default !important;
+}
+
+.react-flow__edge-path {
+  transition:
+    stroke 0.5s ease,
+    stroke-width 0.5s ease;
+}
+
+.react-flow__edge.animated path {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.react-flow__attribution {
+  display: none !important;
+}
+
+/* ── Agent node pulse ring ── */
+@keyframes agent-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  70% {
+    transform: scale(1.08);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.08);
+    opacity: 0;
+  }
+}
+
+.agent-running-ring {
+  animation: agent-pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* ── Glassmorphism utility classes ── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.glass-card-blue {
+  background: rgba(59, 130, 246, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow:
+    0 0 30px rgba(59, 130, 246, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ── Syntax highlighter override ── */
+pre[class*="language-"] {
+  background: transparent !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 11px !important;
+  line-height: 1.6 !important;
+}
+
+/* ── Prose (markdown) dark styles ── */
+.prose-hackfarmer {
+  --tw-prose-body: rgba(255, 255, 255, 0.75);
+  --tw-prose-headings: #ffffff;
+  --tw-prose-links: #3b82f6;
+  --tw-prose-bold: #ffffff;
+  --tw-prose-code: #e2e8f0;
+  --tw-prose-pre-bg: rgba(255, 255, 255, 0.04);
+  --tw-prose-hr: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Page transition ── */
+.page-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 250ms ease,
+    transform 250ms ease;
 }

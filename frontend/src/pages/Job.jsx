@@ -1,97 +1,42 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  Search, Layers, Monitor, Server, FileText, GitMerge, CheckCircle,
-  ChevronDown, ChevronRight, Github, Download, Copy, Check, X,
-  Loader2, AlertCircle, ExternalLink
-} from 'lucide-react'
+import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight } from 'lucide-react'
 import { useJobStream } from '../hooks/useJobStream'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import AgentPipelineGraph from '../components/AgentPipelineGraph'
+import AgentDrawer from '../components/AgentDrawer'
+import Lottie from 'lottie-react'
+import celebrationAnim from '../animations/celebration.json'
+import confetti from 'canvas-confetti'
 import Button from '../components/Button'
 
-const AGENTS = [
-  { key: 'analyst', label: 'Analyst', icon: Search },
-  { key: 'architect', label: 'Architect', icon: Layers },
-  { key: 'frontend_agent', label: 'Frontend', icon: Monitor },
-  { key: 'backend_agent', label: 'Backend', icon: Server },
-  { key: 'business_agent', label: 'Business', icon: FileText },
-  { key: 'integrator', label: 'Integrator', icon: GitMerge },
-  { key: 'validator', label: 'Validator', icon: CheckCircle },
-]
+const AGENT_KEYS = ['analyst','architect','frontend_agent','backend_agent','business_agent','integrator','validator','github_agent']
 
-function AgentCard({ agent, state }) {
-  const [expanded, setExpanded] = useState(false)
-  const status = state?.status || 'idle'
-  const Icon = agent.icon
+function getLang(filename) {
+  if (!filename) return 'text'
+  if (filename.endsWith('.py'))   return 'python'
+  if (filename.endsWith('.jsx') || filename.endsWith('.js')) return 'jsx'
+  if (filename.endsWith('.json')) return 'json'
+  if (filename.endsWith('.yml') || filename.endsWith('.yaml')) return 'yaml'
+  if (filename.endsWith('.md'))   return 'markdown'
+  return 'text'
+}
 
-  const borderColor = {
-    idle: 'border-white/10',
-    running: 'border-blue-500',
-    done: 'border-green-500',
-    failed: 'border-red-500',
-  }[status]
-
+function Skeleton({ lines = 4 }) {
   return (
-    <motion.div
-      layout
-      className={`border-l-4 ${borderColor} rounded-r-lg bg-white/5 transition-all`}
-    >
-      <button
-        onClick={() => status === 'done' && setExpanded(!expanded)}
-        className={`w-full flex items-center gap-3 px-4 py-3 text-left ${status === 'done' ? 'cursor-pointer hover:bg-white/5' : 'cursor-default'}`}
-      >
-        <Icon size={18} className={status === 'idle' ? 'text-white/20' : status === 'running' ? 'text-blue-400' : status === 'done' ? 'text-green-400' : 'text-red-400'} />
-        <span className={`text-sm font-medium flex-1 ${status === 'idle' ? 'text-white/30' : 'text-white'}`}>
-          {agent.label}
-        </span>
-
-        {status === 'idle' && <span className="text-xs text-white/20">Waiting...</span>}
-        {status === 'running' && (
-          <span className="flex items-center gap-1 text-xs text-blue-400">
-            <Loader2 size={12} className="animate-spin" />
-            {state.message || 'Processing...'}
-          </span>
-        )}
-        {status === 'done' && (
-          <span className="flex items-center gap-2 text-xs text-green-400">
-            <CheckCircle size={12} />
-            {state.files?.length ? `${state.files.length} files` : 'Done'}
-            <ChevronDown size={12} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-          </span>
-        )}
-        {status === 'failed' && (
-          <span className="flex items-center gap-1 text-xs text-red-400">
-            <X size={12} /> Failed
-          </span>
-        )}
-      </button>
-
-      <AnimatePresence>
-        {expanded && status === 'done' && state.files?.length > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="px-4 pb-3 space-y-1">
-              {state.files.map(f => (
-                <div key={f} className="text-xs text-white/40 font-mono pl-7">📄 {f}</div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+    <div className="space-y-3 p-6">
+      {Array.from({ length: lines }).map((_, i) => (
+        <div key={i} className="h-4 rounded bg-white/5 animate-pulse" style={{ width: `${65 + Math.random() * 30}%` }} />
+      ))}
+    </div>
   )
 }
 
 function MermaidDiagram({ chart }) {
   const ref = useRef(null)
   const [svg, setSvg] = useState('')
-
   useEffect(() => {
     if (!chart) return
     let cancelled = false
@@ -104,20 +49,58 @@ function MermaidDiagram({ chart }) {
     })
     return () => { cancelled = true }
   }, [chart])
-
-  if (!svg) return <div className="text-white/20 text-sm text-center py-8">Rendering diagram...</div>
-  return <div ref={ref} dangerouslySetInnerHTML={{ __html: svg }} className="w-full overflow-x-auto [&_svg]:mx-auto" />
+  if (!svg) return <Skeleton lines={5} />
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} ref={ref}
+      dangerouslySetInnerHTML={{ __html: svg }} className="w-full overflow-x-auto [&_svg]:mx-auto" />
+  )
 }
 
 function MarkdownRenderer({ content }) {
   const [ReactMarkdown, setRM] = useState(null)
-  useEffect(() => {
-    import('react-markdown').then(mod => setRM(() => mod.default))
-  }, [])
-  if (!ReactMarkdown) return <div className="text-white/20">Loading...</div>
+  useEffect(() => { import('react-markdown').then(mod => setRM(() => mod.default)) }, [])
+  if (!ReactMarkdown) return <Skeleton lines={6} />
   return (
-    <div className="prose prose-invert prose-sm max-w-none">
+    <div className="prose prose-invert prose-sm max-w-none prose-hackfarmer">
       <ReactMarkdown>{content}</ReactMarkdown>
+    </div>
+  )
+}
+
+function PitchCarousel({ slides }) {
+  const [idx, setIdx] = useState(0)
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'ArrowRight') setIdx(i => Math.min(slides.length - 1, i + 1))
+      if (e.key === 'ArrowLeft')  setIdx(i => Math.max(0, i - 1))
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [slides.length])
+
+  if (!slides || slides.length === 0) return <Skeleton lines={4} />
+
+  const slide = slides[idx]
+  return (
+    <div className="p-6 flex flex-col h-full">
+      <div className="flex-1 space-y-4">
+        <h3 className="text-[28px] font-bold font-heading">{slide.title}</h3>
+        <div className="text-white/80 text-base whitespace-pre-wrap">{slide.content}</div>
+        {slide.notes && <p className="text-xs text-white/30 mt-4 italic">{slide.notes}</p>}
+      </div>
+      <div className="flex items-center justify-between pt-4 border-t border-white/10">
+        <button onClick={() => setIdx(Math.max(0, idx - 1))} disabled={idx === 0}
+          className="px-3 py-1 text-sm text-white/40 hover:text-white disabled:opacity-20">← Prev</button>
+        <div className="flex gap-1.5">
+          {slides.map((_, i) => (
+            <button key={i} onClick={() => setIdx(i)}
+              className={`w-2 h-2 rounded-full transition-all ${i === idx ? 'bg-blue-500 scale-125' : 'bg-white/20'}`} />
+          ))}
+        </div>
+        <button onClick={() => setIdx(Math.min(slides.length - 1, idx + 1))} disabled={idx === slides.length - 1}
+          className="px-3 py-1 text-sm text-white/40 hover:text-white disabled:opacity-20">Next →</button>
+      </div>
     </div>
   )
 }
@@ -126,48 +109,69 @@ export default function Job() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { agentStates, jobStatus, result, businessContent } = useJobStream(id)
-  const [rightTab, setRightTab] = useState('code')
+
+  const [selectedNode, setSelectedNode] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
+  const [rightTab, setRightTab] = useState('code')
+  const [confettiFired, setConfettiFired] = useState(false)
   const [copied, setCopied] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const startTime = useRef(Date.now())
 
+  // Elapsed timer
   useEffect(() => {
     if (jobStatus === 'complete' || jobStatus === 'failed') return
     const interval = setInterval(() => setElapsed(Math.floor((Date.now() - startTime.current) / 1000)), 1000)
     return () => clearInterval(interval)
   }, [jobStatus])
 
-  const agentsDone = AGENTS.filter(a => agentStates[a.key]?.status === 'done').length
-  const progress = (agentsDone / 7) * 100
+  // Confetti on completion
+  useEffect(() => {
+    if (jobStatus === 'complete' && !confettiFired) {
+      setConfettiFired(true)
+      const fire = (ratio, opts) => confetti({ ...opts, origin: { y: 0.7 }, particleCount: Math.floor(200 * ratio) })
+      fire(0.25, { spread: 26, startVelocity: 55, colors: ['#3b82f6', '#8b5cf6'] })
+      fire(0.2,  { spread: 60, colors: ['#22c55e', '#06b6d4'] })
+      fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8, colors: ['#f59e0b', '#ec4899'] })
+      fire(0.1,  { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 })
+      fire(0.1,  { spread: 120, startVelocity: 45 })
+    }
+  }, [jobStatus])
 
-  // Collect all generated files across agents
-  const allFiles = {}
-  AGENTS.forEach(a => {
-    const st = agentStates[a.key]
-    if (st?.files) st.files.forEach(f => { allFiles[f] = st })
-  })
-  const fileList = Object.keys(allFiles).sort()
+  const agentsDone = AGENT_KEYS.filter(k => agentStates[k]?.status === 'done').length
+  const totalFiles = AGENT_KEYS.reduce((n, k) => n + (agentStates[k]?.files?.length || 0), 0)
+  const validationScore = agentStates.validator?.status === 'done' ? (result?.validation_score || '—') : '—'
 
-  // Derived data from result and businessContent
+  // Collect all generated file paths
+  const fileList = useMemo(() => {
+    const files = []
+    AGENT_KEYS.forEach(k => { agentStates[k]?.files?.forEach(f => { if (!files.includes(f)) files.push(f) }) })
+    return files.sort()
+  }, [agentStates])
+
+  const groupedFiles = useMemo(() => {
+    const groups = { frontend: [], backend: [], config: [] }
+    fileList.forEach(f => {
+      if (f.startsWith('frontend/')) groups.frontend.push(f)
+      else if (f.startsWith('backend/')) groups.backend.push(f)
+      else groups.config.push(f)
+    })
+    return groups
+  }, [fileList])
+
   const mermaidChart = businessContent?.architecture_mermaid || null
   const readmeContent = businessContent?.readme_content || null
   const pitchSlides = businessContent?.pitch_slides || []
   const githubUrl = result?.github_url || null
   const zipFileId = result?.zip_file_id || null
+  const repoName = result?.repo_name || id
 
-  const formatTime = (s) => `${Math.floor(s / 60)}m ${s % 60}s`
+  const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
-  const handleCopyUrl = () => {
-    navigator.clipboard.writeText(window.location.href)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  const handleCopyUrl = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000) }
+  const handleDownload = () => { window.open(`/api/downloads/${id}`, '_blank') }
 
-  const handleDownload = () => {
-    window.open(`/api/downloads/${id}`, '_blank')
-  }
-
+  // Failed state
   if (jobStatus === 'failed') {
     return (
       <div className="flex flex-col items-center justify-center py-24 space-y-6">
@@ -182,101 +186,125 @@ export default function Job() {
   }
 
   const rightTabs = [
+    { id: 'architecture', label: 'Architecture' },
     { id: 'code', label: 'Code' },
-    { id: 'architecture', label: 'Architecture', ready: !!mermaidChart },
-    { id: 'readme', label: 'README', ready: !!readmeContent },
-    { id: 'pitch', label: 'Pitch', ready: pitchSlides.length > 0 },
+    { id: 'readme', label: 'README' },
+    { id: 'pitch', label: 'Pitch' },
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Two-panel layout */}
-      <div className="flex flex-col md:flex-row gap-6">
-        {/* Left panel — Agent Timeline (55%) */}
-        <div className="md:w-[55%] space-y-4">
-          {/* Progress bar */}
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-white/60">{agentsDone} of 7 agents complete</span>
-              <span className="text-white/40 tabular-nums">{formatTime(elapsed)}</span>
-            </div>
-            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-                animate={{ width: `${progress}%` }}
-                transition={{ type: 'spring', bounce: 0.2 }}
-              />
-            </div>
-          </div>
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 6rem)', margin: '0 -1rem' }}>
+      {/* Top bar */}
+      <div className="flex items-center gap-4 px-4 py-3 border-b border-white/10 flex-shrink-0">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-sm text-white/40">
+          <button onClick={() => navigate('/history')} className="hover:text-white/60 transition-colors">Projects</button>
+          <ChevronRight size={14} />
+          <span className="text-white font-medium truncate max-w-[120px]">{repoName}</span>
+        </div>
 
-          {/* Agent cards */}
-          <div className="space-y-2">
-            {AGENTS.map(agent => (
-              <AgentCard key={agent.key} agent={agent} state={agentStates[agent.key]} />
-            ))}
+        {/* Agent status pills */}
+        <div className="flex-1 flex items-center justify-center gap-1">
+          {AGENT_KEYS.map(k => {
+            const s = agentStates[k]?.status || 'idle'
+            return (
+              <div key={k} className={`h-1.5 rounded-full transition-all duration-500 ${
+                s === 'done' ? 'w-6 bg-green-500' : s === 'running' ? 'w-6 bg-blue-500 animate-pulse' : s === 'failed' ? 'w-6 bg-red-500' : 'w-3 bg-white/10'
+              }`} title={k} />
+            )
+          })}
+        </div>
+
+        {/* Timer + status */}
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-white/40 tabular-nums font-mono text-xs">{formatTime(elapsed)}</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+            jobStatus === 'complete' ? 'bg-green-500/20 text-green-400' : jobStatus === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'
+          }`}>
+            {jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'}
+          </span>
+        </div>
+      </div>
+
+      {/* Main body - two columns */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left column — Pipeline (42%) */}
+        <div className="w-[42%] border-r border-white/10 flex flex-col overflow-hidden">
+          <div className="px-4 pt-3 pb-1">
+            <h2 className="text-xs font-heading text-white/30 uppercase tracking-widest">Pipeline</h2>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <AgentPipelineGraph agentStates={agentStates} onNodeClick={setSelectedNode} />
+          </div>
+          {/* Mini stats bar */}
+          <div className="flex items-center gap-6 px-4 py-3 border-t border-white/10 text-xs text-white/40">
+            <div>Agents: <span className="text-white/80 font-medium">{agentsDone}/8</span></div>
+            <div>Files: <span className="text-white/80 font-medium">{totalFiles}</span></div>
+            <div>Score: <span className="text-white/80 font-medium">{validationScore}</span></div>
           </div>
         </div>
 
-        {/* Right panel — Live Output (45%) */}
-        <div className="md:w-[45%] space-y-4">
-          {/* Tabs */}
-          <div className="flex gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
-            {rightTabs.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setRightTab(t.id)}
-                className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  rightTab === t.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+        {/* Right column — Output (58%) */}
+        <div className="w-[58%] flex flex-col overflow-hidden">
+          <div className="px-4 pt-3 pb-2 flex items-center gap-3">
+            <h2 className="text-xs font-heading text-white/30 uppercase tracking-widest mr-3">Output</h2>
+            <div className="flex gap-1 bg-white/5 rounded-lg p-0.5 border border-white/10">
+              {rightTabs.map(t => (
+                <button key={t.id} onClick={() => setRightTab(t.id)}
+                  className={`px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                    rightTab === t.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
+                  }`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Tab content */}
-          <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden min-h-[500px] flex flex-col">
+          <div className="flex-1 overflow-hidden border-t border-white/10">
+            {/* Architecture tab */}
             {rightTab === 'architecture' && (
-              <div className="p-4 overflow-auto flex-1">
-                {mermaidChart ? <MermaidDiagram chart={mermaidChart} /> : (
-                  <div className="flex items-center justify-center h-full text-white/20 text-sm">
-                    <Loader2 size={16} className="animate-spin mr-2" /> Waiting for Business agent...
-                  </div>
-                )}
+              <div className="p-4 overflow-auto h-full">
+                {mermaidChart ? <MermaidDiagram chart={mermaidChart} /> : <Skeleton lines={5} />}
               </div>
             )}
 
+            {/* Code tab */}
             {rightTab === 'code' && (
-              <div className="flex flex-1 overflow-hidden">
+              <div className="flex h-full overflow-hidden">
                 {/* File tree */}
-                <div className="w-[35%] border-r border-white/10 overflow-y-auto p-2 space-y-0.5">
+                <div className="w-[30%] border-r border-white/10 overflow-y-auto p-2 space-y-2">
                   {fileList.length === 0 ? (
-                    <div className="text-xs text-white/20 p-2">No files yet...</div>
-                  ) : fileList.map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setSelectedFile(f)}
-                      className={`w-full text-left text-xs font-mono px-2 py-1 rounded truncate transition-colors ${
-                        selectedFile === f ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      {f}
-                    </button>
-                  ))}
+                    <Skeleton lines={3} />
+                  ) : (
+                    <>
+                      {groupedFiles.frontend.length > 0 && (
+                        <FileGroup label="Frontend" color="text-cyan-400" files={groupedFiles.frontend}
+                          selectedFile={selectedFile} onSelect={setSelectedFile} />
+                      )}
+                      {groupedFiles.backend.length > 0 && (
+                        <FileGroup label="Backend" color="text-amber-400" files={groupedFiles.backend}
+                          selectedFile={selectedFile} onSelect={setSelectedFile} />
+                      )}
+                      {groupedFiles.config.length > 0 && (
+                        <FileGroup label="Config" color="text-white/40" files={groupedFiles.config}
+                          selectedFile={selectedFile} onSelect={setSelectedFile} />
+                      )}
+                    </>
+                  )}
                 </div>
                 {/* Code viewer */}
-                <div className="w-[65%] overflow-auto text-xs">
+                <div className="w-[70%] overflow-auto">
                   {selectedFile ? (
                     <SyntaxHighlighter
-                      language={selectedFile.endsWith('.py') ? 'python' : selectedFile.endsWith('.jsx') || selectedFile.endsWith('.js') ? 'jsx' : selectedFile.endsWith('.json') ? 'json' : 'text'}
+                      language={getLang(selectedFile)}
                       style={oneDark}
-                      customStyle={{ margin: 0, background: 'transparent', fontSize: '11px' }}
+                      customStyle={{ margin: 0, background: 'transparent', fontSize: '11px', minHeight: '100%' }}
+                      showLineNumbers
                     >
-                      {/* File content from agent events — we show the path as placeholder */}
                       {`// File: ${selectedFile}\n// Content will be available after download`}
                     </SyntaxHighlighter>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-white/20 text-sm p-4">
+                    <div className="flex items-center justify-center h-full text-white/20 text-sm">
                       Select a file to view
                     </div>
                   )}
@@ -284,44 +312,44 @@ export default function Job() {
               </div>
             )}
 
+            {/* README tab */}
             {rightTab === 'readme' && (
-              <div className="p-6 overflow-auto flex-1">
-                {readmeContent ? <MarkdownRenderer content={readmeContent} /> : (
-                  <div className="flex items-center justify-center h-full text-white/20 text-sm">
-                    <Loader2 size={16} className="animate-spin mr-2" /> Waiting for Business agent...
-                  </div>
-                )}
+              <div className="p-6 overflow-auto h-full">
+                {readmeContent ? <MarkdownRenderer content={readmeContent} /> : <Skeleton lines={6} />}
               </div>
             )}
 
+            {/* Pitch tab */}
             {rightTab === 'pitch' && (
-              <PitchCarousel slides={pitchSlides} />
+              <div className="h-full overflow-auto">
+                <PitchCarousel slides={pitchSlides} />
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Bottom result panel */}
+      {/* Bottom result bar — slides up on completion */}
       <AnimatePresence>
         {jobStatus === 'complete' && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-6 rounded-2xl bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-white/10 flex flex-col sm:flex-row items-center gap-4"
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+            className="flex-shrink-0 px-6 py-4 bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-t border-white/10 flex items-center gap-4"
           >
-            <div className="flex-1 text-center sm:text-left">
-              <h3 className="text-lg font-bold">🎉 Project Generated!</h3>
-              <p className="text-sm text-white/60">Your code is ready to go.</p>
+            <div className="w-12 h-12 flex-shrink-0">
+              <Lottie animationData={celebrationAnim} loop={false} autoplay={true} style={{ width: 48, height: 48 }} />
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-bold font-heading">🎉 {repoName} is ready!</h3>
+              <p className="text-sm text-white/50">Your project has been generated and pushed.</p>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
               {githubUrl && (
-                <a
-                  href={githubUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-lg font-medium text-sm hover:bg-white/90 transition-colors"
-                >
-                  <Github size={16} /> Open GitHub Repo
+                <a href={githubUrl} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-lg font-medium text-sm hover:bg-white/90 transition-colors">
+                  <Github size={16} /> Open on GitHub
                 </a>
               )}
               {zipFileId && (
@@ -329,55 +357,49 @@ export default function Job() {
                   <Download size={16} /> Download ZIP
                 </Button>
               )}
-              <button
-                onClick={handleCopyUrl}
-                className="p-2.5 rounded-lg bg-white/10 text-white/60 hover:text-white transition-colors"
-                title="Copy link"
-              >
+              <button onClick={handleCopyUrl}
+                className="p-2.5 rounded-lg bg-white/10 text-white/60 hover:text-white transition-colors" title="Copy link">
                 {copied ? <Check size={16} /> : <Copy size={16} />}
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Agent Drawer */}
+      <AgentDrawer
+        agentKey={selectedNode}
+        agentState={selectedNode ? agentStates[selectedNode] : null}
+        allEvents={[]}
+        onClose={() => setSelectedNode(null)}
+      />
     </div>
   )
 }
 
-function PitchCarousel({ slides }) {
-  const [idx, setIdx] = useState(0)
-  if (!slides || slides.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full text-white/20 text-sm p-4">
-        <Loader2 size={16} className="animate-spin mr-2" /> Waiting for Business agent...
-      </div>
-    )
-  }
-  const slide = slides[idx]
+function FileGroup({ label, color, files, selectedFile, onSelect }) {
+  const [open, setOpen] = useState(true)
   return (
-    <div className="p-6 flex flex-col h-full">
-      <div className="flex-1 space-y-4">
-        <h3 className="text-xl font-bold">{slide.title}</h3>
-        <div className="text-white/80 text-sm whitespace-pre-wrap">{slide.content}</div>
-        {slide.notes && <p className="text-xs text-white/30 mt-4 italic">{slide.notes}</p>}
-      </div>
-      <div className="flex items-center justify-between pt-4 border-t border-white/10">
-        <button
-          onClick={() => setIdx(Math.max(0, idx - 1))}
-          disabled={idx === 0}
-          className="px-3 py-1 text-sm text-white/40 hover:text-white disabled:opacity-20"
-        >
-          ← Prev
-        </button>
-        <span className="text-xs text-white/30">{idx + 1} / {slides.length}</span>
-        <button
-          onClick={() => setIdx(Math.min(slides.length - 1, idx + 1))}
-          disabled={idx === slides.length - 1}
-          className="px-3 py-1 text-sm text-white/40 hover:text-white disabled:opacity-20"
-        >
-          Next →
-        </button>
-      </div>
+    <div>
+      <button onClick={() => setOpen(!open)} className={`flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider w-full px-1 py-1 ${color}`}>
+        <ChevronRight size={10} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+        📁 {label} ({files.length})
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden">
+            {files.map(f => (
+              <button key={f} onClick={() => onSelect(f)}
+                className={`w-full text-left text-[11px] font-mono px-3 py-0.5 rounded truncate transition-colors ${
+                  selectedFile === f ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:text-white hover:bg-white/5'
+                }`}>
+                {f.split('/').pop()}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
