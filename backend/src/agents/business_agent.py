@@ -36,6 +36,8 @@ async def business_agent(state: ProjectState) -> dict:
             "agentName": "business_agent",
             "status": "running",
             "retryCount": 0,
+            "runDuration": 0,
+            "outputFormat": "json",
             "startedAt": datetime.now(timezone.utc).isoformat(),
         })
         agent_run_id = doc["$id"]

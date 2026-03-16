@@ -66,7 +66,9 @@ def publish(job_id: str, event_type: str, payload: dict) -> None:
                 data.update({
                     "jobId": job_id,
                     "agentName": agent_name,
-                    "retryCount": 0
+                    "retryCount": 0,
+                    "runDuration": 0,
+                    "outputFormat": "json",
                 })
                 databases.create_document(db_id, "agent-runs", "unique()", data)
         except Exception as e:

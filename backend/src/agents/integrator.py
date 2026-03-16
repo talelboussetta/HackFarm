@@ -226,6 +226,8 @@ async def integrator(state: ProjectState) -> dict:
             "agentName": "integrator",
             "status": "running",
             "retryCount": 0,
+            "runDuration": 0,
+            "outputFormat": "json",
             "startedAt": datetime.now(timezone.utc).isoformat(),
         })
         agent_run_id = doc["$id"]

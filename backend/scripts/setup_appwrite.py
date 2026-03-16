@@ -206,26 +206,27 @@ def setup_jobs():
 
 def setup_agent_runs():
     coll_id = "agent-runs"
-    if collection_exists(DATABASE_ID, coll_id):
-        print(f"  ✓ Collection '{coll_id}' exists")
-        return
-
-    databases.create_collection(
-        database_id=DATABASE_ID,
-        collection_id=coll_id,
-        name="Agent Runs",
-        permissions=[
-            Permission.read(Role.users()),
-            Permission.create(Role.users()),
-            Permission.update(Role.users()),
-        ],
-    )
-    print(f"  + Created collection '{coll_id}'")
+    if not collection_exists(DATABASE_ID, coll_id):
+        databases.create_collection(
+            database_id=DATABASE_ID,
+            collection_id=coll_id,
+            name="Agent Runs",
+            permissions=[
+                Permission.read(Role.users()),
+                Permission.create(Role.users()),
+                Permission.update(Role.users()),
+            ],
+        )
+        print(f"  + Created collection '{coll_id}'")
+    else:
+        print(f"  ✓ Collection '{coll_id}' exists — adding missing attributes")
 
     create_string_attr(DATABASE_ID, coll_id, "jobId", 36, required=True)
     create_string_attr(DATABASE_ID, coll_id, "agentName", 30, required=True)
-    create_string_attr(DATABASE_ID, coll_id, "status", 20, required=True, default="waiting")
+    create_string_attr(DATABASE_ID, coll_id, "status", 20, default="waiting")
     create_int_attr(DATABASE_ID, coll_id, "retryCount", default=0)
+    create_int_attr(DATABASE_ID, coll_id, "runDuration", default=0)
+    create_string_attr(DATABASE_ID, coll_id, "outputFormat", 20, default="json")
     create_string_attr(DATABASE_ID, coll_id, "startedAt", 30)
     create_string_attr(DATABASE_ID, coll_id, "completedAt", 30)
     create_string_attr(DATABASE_ID, coll_id, "outputSummary", 500)
@@ -267,24 +268,24 @@ def setup_user_api_keys():
 
 def setup_job_events():
     coll_id = "job-events"
-    if collection_exists(DATABASE_ID, coll_id):
-        print(f"  ✓ Collection '{coll_id}' exists")
-        return
-
-    databases.create_collection(
-        database_id=DATABASE_ID,
-        collection_id=coll_id,
-        name="Job Events",
-        permissions=[
-            Permission.read(Role.users()),
-            Permission.create(Role.users()),
-        ],
-    )
-    print(f"  + Created collection '{coll_id}'")
+    if not collection_exists(DATABASE_ID, coll_id):
+        databases.create_collection(
+            database_id=DATABASE_ID,
+            collection_id=coll_id,
+            name="Job Events",
+            permissions=[
+                Permission.read(Role.users()),
+                Permission.create(Role.users()),
+            ],
+        )
+        print(f"  + Created collection '{coll_id}'")
+    else:
+        print(f"  ✓ Collection '{coll_id}' exists — adding missing attributes")
 
     create_string_attr(DATABASE_ID, coll_id, "jobId", 36, required=True)
     create_string_attr(DATABASE_ID, coll_id, "eventType", 30, required=True)
-    create_string_attr(DATABASE_ID, coll_id, "payload", 5000, required=True, default="{}")
+    create_string_attr(DATABASE_ID, coll_id, "payload", 5000, default="{}")
+    create_string_attr(DATABASE_ID, coll_id, "agentName", 30)
 
     time.sleep(2)
     create_index(DATABASE_ID, coll_id, "jobId")
