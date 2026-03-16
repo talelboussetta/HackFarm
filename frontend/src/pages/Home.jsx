@@ -288,17 +288,26 @@ export default function Home() {
         </AnimatePresence>
 
         {/* Feature badges */}
-        <div className="flex items-center gap-3 mt-2">
+        <motion.div
+          className="flex items-center gap-3 mt-2"
+          variants={{ visible: { transition: { staggerChildren: 0.08 } } }}
+          initial="hidden"
+          animate="visible"
+        >
           {[
             { icon: '🔒', label: 'Encrypted keys' },
             { icon: '⚡', label: 'Real-time pipeline' },
             { icon: '🐙', label: 'Auto GitHub push' },
           ].map(b => (
-            <span key={b.label} className="flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-white/30">
+            <motion.span
+              key={b.label}
+              variants={{ hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } }}
+              className="flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-white/30"
+            >
               <span>{b.icon}</span> {b.label}
-            </span>
+            </motion.span>
           ))}
-        </div>
+        </motion.div>
       </div>
     </div>
   )

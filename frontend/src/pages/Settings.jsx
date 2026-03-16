@@ -20,7 +20,7 @@ import { api } from '../lib/api'
 import Button from '../components/Button'
 
 export default function Settings() {
-  const { user, logout } = useAuth()
+  const { user, logout, getJWT } = useAuth()
   const [keys, setKeys] = useState([])
   const [loading, setLoading] = useState(true)
   const [addingProvider, setAddingProvider] = useState(null)
@@ -28,6 +28,7 @@ export default function Settings() {
   const [testResults, setTestResults] = useState({})
   const [testingProvider, setTestingProvider] = useState(null)
   const [savingProvider, setSavingProvider] = useState(null)
+  const [saveError, setSaveError] = useState(null)
 
   // Preferences (static for now)
   const [repoVisibility, setRepoVisibility] = useState('public')
@@ -43,7 +44,8 @@ export default function Settings() {
     if (!user) return
     const fetchKeys = async () => {
       try {
-        const data = await api('/api/settings/keys')
+        const jwt = await getJWT()
+        const data = await api('/api/settings/keys', {}, jwt)
         setKeys(Array.isArray(data) ? data : [])
       } catch (e) {
         console.error('Failed to fetch keys:', e)
@@ -52,22 +54,25 @@ export default function Settings() {
       }
     }
     fetchKeys()
-  }, [user])
+  }, [user, getJWT])
 
   const handleSaveKey = async (provider) => {
     if (!newKey.trim()) return
     setSavingProvider(provider)
+    setSaveError(null)
     try {
+      const jwt = await getJWT()
       await api('/api/settings/keys', {
         method: 'POST',
         body: JSON.stringify({ provider, key: newKey.trim() }),
-      })
-      const data = await api('/api/settings/keys')
+      }, jwt)
+      const data = await api('/api/settings/keys', {}, jwt)
       setKeys(Array.isArray(data) ? data : [])
       setAddingProvider(null)
       setNewKey('')
     } catch (e) {
       console.error('Failed to save key:', e)
+      setSaveError(e.message || 'Failed to save key')
     } finally {
       setSavingProvider(null)
     }
@@ -75,7 +80,8 @@ export default function Settings() {
 
   const handleDeleteKey = async (provider) => {
     try {
-      await api(`/api/settings/keys/${provider}`, { method: 'DELETE' })
+      const jwt = await getJWT()
+      await api(`/api/settings/keys/${provider}`, { method: 'DELETE' }, jwt)
       setKeys(keys.filter(k => k.provider !== provider))
       setTestResults(prev => { const n = {...prev}; delete n[provider]; return n })
     } catch (e) {
@@ -87,7 +93,8 @@ export default function Settings() {
     setTestingProvider(provider)
     setTestResults(prev => ({ ...prev, [provider]: null }))
     try {
-      const res = await api(`/api/settings/keys/${provider}/test`, { method: 'POST' })
+      const jwt = await getJWT()
+      const res = await api(`/api/settings/keys/${provider}/test`, { method: 'POST' }, jwt)
       setTestResults(prev => ({ ...prev, [provider]: res.valid !== false }))
     } catch {
       setTestResults(prev => ({ ...prev, [provider]: false }))
@@ -176,7 +183,9 @@ export default function Settings() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
-                className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4"
+                whileHover={{ y: -2, boxShadow: `0 8px 32px ${existing ? '#22c55e' : '#3b82f6'}20` }}
+                className="p-6 rounded-2xl bg-white/5 border space-y-4"
+                style={{ borderColor: existing ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.1)' }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -236,8 +245,11 @@ export default function Settings() {
                       </div>
                       <div className="flex gap-2">
                         <Button size="sm" onClick={() => handleSaveKey(p.id)} disabled={!newKey.trim()} loading={savingProvider === p.id}>Save Key</Button>
-                        <Button size="sm" variant="ghost" onClick={() => { setAddingProvider(null); setNewKey('') }}>Cancel</Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setAddingProvider(null); setNewKey(''); setSaveError(null) }}>Cancel</Button>
                       </div>
+                      {saveError && (
+                        <p className="text-xs text-red-400">{saveError}</p>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

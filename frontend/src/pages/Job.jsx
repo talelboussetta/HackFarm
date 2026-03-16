@@ -159,7 +159,13 @@ export default function Job() {
   const handleCopyUrl = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000) }
   const handleDownload = () => { window.open(`/api/downloads/${id}`, '_blank') }
 
-  // Failed state
+  const handleNodeClick = (agentKey) => {
+    if (window.innerWidth < 768) {
+      setSelectedNode(agentKey)
+    } else {
+      navigate(`/job/${id}/agent/${agentKey}`)
+    }
+  }
   if (jobStatus === 'failed') {
     return (
       <div className="flex flex-col items-center justify-center py-24 space-y-6">
@@ -222,7 +228,7 @@ export default function Job() {
             <h2 className="text-xs font-heading text-white/30 uppercase tracking-widest">Pipeline</h2>
           </div>
           <div className="flex-1 overflow-hidden">
-            <AgentPipelineGraph agentStates={agentStates} onNodeClick={setSelectedNode} />
+            <AgentPipelineGraph agentStates={agentStates} onNodeClick={handleNodeClick} />
           </div>
           {/* Mini stats bar */}
           <div className="flex items-center gap-6 px-4 py-3 border-t border-white/10 text-xs text-white/40">

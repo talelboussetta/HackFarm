@@ -33,7 +33,7 @@ function relativeTime(dateStr) {
 }
 
 export default function History() {
-  const { user } = useAuth()
+  const { user, getJWT } = useAuth()
   const navigate = useNavigate()
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -43,7 +43,8 @@ export default function History() {
     if (!user) return
     const fetchJobs = async () => {
       try {
-        const data = await api('/api/jobs')
+        const jwt = await getJWT()
+        const data = await api('/api/jobs', {}, jwt)
         setJobs(Array.isArray(data) ? data : [])
       } catch (e) {
         console.error('Failed to fetch jobs:', e)
@@ -52,13 +53,14 @@ export default function History() {
       }
     }
     fetchJobs()
-  }, [user])
+  }, [user, getJWT])
 
   const handleDelete = async (jobId) => {
     if (!confirm('Delete this project? This cannot be undone.')) return
     setDeleting(jobId)
     try {
-      await api(`/api/jobs/${jobId}`, { method: 'DELETE' })
+      const jwt = await getJWT()
+      await api(`/api/jobs/${jobId}`, { method: 'DELETE' }, jwt)
       setJobs(jobs.filter(j => (j.id || j.$id) !== jobId))
     } catch (e) {
       console.error('Failed to delete job:', e)
@@ -144,8 +146,10 @@ export default function History() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: -20 }}
+                      whileHover={{ backgroundColor: 'rgba(255,255,255,0.04)', x: 4 }}
                       onClick={() => navigate(`/job/${jobId}`)}
-                      className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
+                      className="border-b border-white/5 cursor-pointer transition-colors"
+                      style={{ borderLeft: `2px solid transparent` }}
                     >
                       <td className="py-3 px-4">
                         <span className="font-medium text-white hover:text-blue-400 transition-colors">
