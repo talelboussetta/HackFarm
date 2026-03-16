@@ -164,7 +164,7 @@ export default function AgentPipelineGraph({ agentStates, onNodeClick }) {
           onClick: () => onNodeClick?.(key),
         },
         draggable: false,
-        selectable: false,
+        selectable: true,
       }
     })
     setNodes(newNodes)
@@ -202,6 +202,7 @@ export default function AgentPipelineGraph({ agentStates, onNodeClick }) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={(_event, node) => onNodeClick?.(node.id)}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.3 }}
@@ -211,7 +212,7 @@ export default function AgentPipelineGraph({ agentStates, onNodeClick }) {
         zoomOnPinch={false}
         nodesDraggable={false}
         nodesConnectable={false}
-        elementsSelectable={false}
+        elementsSelectable={true}
         className="!bg-transparent"
       >
         <Background

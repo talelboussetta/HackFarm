@@ -43,7 +43,7 @@ class LLMRouter:
                 client = AsyncOpenAI(
                     api_key=p["decrypted_key"],
                     base_url=cfg["base_url"],
-                    timeout=60.0,
+                    timeout=120.0,
                 )
                 clients.append({
                     "client": client,

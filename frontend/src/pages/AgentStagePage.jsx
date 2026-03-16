@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, FileCode2, Brain, Terminal } from 'lucide-react'
 import { AGENT_THEMES } from '../config/agentThemes'
 import { useJobStream } from '../hooks/useJobStream'
 import ParticleField from '../components/ParticleField'
@@ -124,6 +124,297 @@ function ScoreCounter({ score }) {
     return () => clearInterval(timer)
   }, [score])
   return <>{typeof displayed === 'number' ? displayed.toFixed(1) : '—'}</>
+}
+
+/** IDE-like output panel for the right side of the hero */
+function IDEOutputPanel({ files, events, agentKey, theme, status, agentState }) {
+  const [activeTab, setActiveTab] = useState('files')
+  const logsEndRef = useRef(null)
+
+  const knowledgeItems = useMemo(() => {
+    return events
+      .map(ev => {
+        try {
+          const p = typeof ev.payload === 'string' ? JSON.parse(ev.payload) : ev.payload
+          return {
+            type: ev.eventType || ev.event_type || '',
+            message: p.message || p.summary || p.error || null,
+            time: ev.$createdAt ? new Date(ev.$createdAt).toLocaleTimeString() : '',
+          }
+        } catch { return null }
+      })
+      .filter(Boolean)
+      .filter(k => k.message)
+  }, [events])
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [knowledgeItems])
+
+  const tabs = [
+    { id: 'files', label: 'Files', icon: FileCode2, count: files.length },
+    { id: 'knowledge', label: 'Output', icon: Brain, count: knowledgeItems.length },
+    { id: 'logs', label: 'Logs', icon: Terminal, count: events.length },
+  ]
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.3, duration: 0.5 }}
+      style={{
+        height: '100%',
+        borderRadius: 16,
+        background: 'rgba(13, 13, 20, 0.85)',
+        border: `1px solid ${theme.accentColor}33`,
+        backdropFilter: 'blur(20px)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        fontFamily: "'JetBrains Mono', monospace",
+      }}
+    >
+      {/* Title bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '10px 16px',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(0,0,0,0.3)',
+      }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f56' }} />
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffbd2e' }} />
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#27c93f' }} />
+        </div>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginLeft: 8 }}>
+          {agentKey}.output
+        </span>
+        {status === 'running' && (
+          <motion.div
+            animate={{ opacity: [0.4, 1, 0.4] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+            style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%', background: theme.accentColor }}
+          />
+        )}
+      </div>
+
+      {/* Tab bar */}
+      <div style={{
+        display: 'flex', gap: 1,
+        padding: '0 8px',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(0,0,0,0.2)',
+      }}>
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 12px',
+              fontSize: 11,
+              fontWeight: activeTab === t.id ? 600 : 400,
+              color: activeTab === t.id ? theme.accentColor : 'rgba(255,255,255,0.35)',
+              background: activeTab === t.id ? 'rgba(255,255,255,0.05)' : 'transparent',
+              border: 'none',
+              borderBottom: activeTab === t.id ? `2px solid ${theme.accentColor}` : '2px solid transparent',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          >
+            <t.icon size={12} />
+            {t.label}
+            {t.count > 0 && (
+              <span style={{
+                fontSize: 9, padding: '1px 5px', borderRadius: 8,
+                background: activeTab === t.id ? `${theme.accentColor}22` : 'rgba(255,255,255,0.08)',
+                color: activeTab === t.id ? theme.accentColor : 'rgba(255,255,255,0.4)',
+              }}>
+                {t.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Content area */}
+      <div style={{ flex: 1, overflow: 'auto', padding: 0 }}>
+        {/* Files tab */}
+        {activeTab === 'files' && (
+          <div style={{ padding: '8px 0' }}>
+            {files.length === 0 ? (
+              <div style={{ padding: '32px 16px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>
+                {status === 'running' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <Loader2 size={18} style={{ color: theme.accentColor, animation: 'spin 1s linear infinite' }} />
+                    <span>Generating files...</span>
+                  </div>
+                ) : status === 'idle' ? 'Waiting for agent to start...' : 'No files generated'}
+              </div>
+            ) : (
+              <AnimatePresence>
+                {files.map((f, i) => {
+                  const filename = f.split('/').pop()
+                  const dir = f.split('/').slice(0, -1).join('/')
+                  const color = fileTypeColor(filename)
+                  const icon = fileTypeIcon(filename)
+                  return (
+                    <motion.div
+                      key={f}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '6px 16px',
+                        borderLeft: `2px solid transparent`,
+                        cursor: 'default',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+                        e.currentTarget.style.borderLeftColor = color
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'transparent'
+                        e.currentTarget.style.borderLeftColor = 'transparent'
+                      }}
+                    >
+                      <span style={{ fontSize: 14, flexShrink: 0, width: 20, textAlign: 'center' }}>{icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {filename}
+                        </div>
+                        {dir && (
+                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {dir}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{
+                        fontSize: 9, padding: '1px 6px', borderRadius: 4,
+                        background: `${color}15`, color: `${color}aa`,
+                      }}>
+                        {filename.split('.').pop()?.toUpperCase()}
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
+            )}
+          </div>
+        )}
+
+        {/* Knowledge/Output tab */}
+        {activeTab === 'knowledge' && (
+          <div style={{ padding: '8px 0' }}>
+            {knowledgeItems.length === 0 ? (
+              <div style={{ padding: '32px 16px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>
+                No output captured yet
+              </div>
+            ) : (
+              knowledgeItems.map((item, i) => {
+                const isThinking = item.type === 'agent_thinking'
+                const isDone = item.type === 'agent_done'
+                const isFailed = item.type === 'agent_failed'
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.03 }}
+                    style={{
+                      padding: '8px 16px',
+                      borderBottom: '1px solid rgba(255,255,255,0.04)',
+                      display: 'flex', gap: 10,
+                    }}
+                  >
+                    <div style={{ flexShrink: 0, paddingTop: 2 }}>
+                      {isDone ? <CheckCircle2 size={12} color="#22c55e" /> :
+                       isFailed ? <XCircle size={12} color="#ef4444" /> :
+                       isThinking ? (
+                         <motion.div
+                           animate={{ rotate: 360 }}
+                           transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                           style={{ width: 12, height: 12, border: `1.5px solid ${theme.accentColor}`, borderTopColor: 'transparent', borderRadius: '50%' }}
+                         />
+                       ) : (
+                         <div style={{ width: 6, height: 6, borderRadius: '50%', background: theme.accentColor, opacity: 0.5, marginTop: 3 }} />
+                       )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 11,
+                        color: isDone ? '#22c55e' : isFailed ? '#ef4444' : 'rgba(255,255,255,0.6)',
+                        lineHeight: 1.5,
+                        wordBreak: 'break-word',
+                      }}>
+                        {item.message}
+                      </div>
+                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 2 }}>{item.time}</div>
+                    </div>
+                  </motion.div>
+                )
+              })
+            )}
+          </div>
+        )}
+
+        {/* Logs tab */}
+        {activeTab === 'logs' && (
+          <div style={{
+            padding: '12px 16px',
+            fontSize: 11,
+            lineHeight: 1.8,
+            color: 'rgba(255,255,255,0.5)',
+          }}>
+            {events.length === 0 ? (
+              <div style={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', paddingTop: 24 }}>
+                No log entries yet
+              </div>
+            ) : (
+              events.map((ev, i) => {
+                let p = {}
+                try { p = typeof ev.payload === 'string' ? JSON.parse(ev.payload) : ev.payload } catch {}
+                const evType = (ev.eventType || ev.event_type || '').replace('agent_', '')
+                const msg = p.message || p.summary || p.error || ''
+                const time = ev.$createdAt ? new Date(ev.$createdAt).toLocaleTimeString() : ''
+                const typeColor = evType === 'done' ? '#22c55e' : evType === 'failed' ? '#ef4444' : evType === 'thinking' ? theme.accentColor : 'rgba(255,255,255,0.3)'
+                return (
+                  <div key={ev.$id || i} style={{ marginBottom: 2 }}>
+                    <span style={{ color: 'rgba(255,255,255,0.15)', marginRight: 8 }}>{time}</span>
+                    <span style={{ color: typeColor, fontWeight: 600, marginRight: 8 }}>[{evType}]</span>
+                    <span>{msg}</span>
+                  </div>
+                )
+              })
+            )}
+            <div ref={logsEndRef} />
+          </div>
+        )}
+      </div>
+
+      {/* Status bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '6px 16px',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(0,0,0,0.2)',
+        fontSize: 10,
+        color: 'rgba(255,255,255,0.3)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: status === 'done' ? '#22c55e' : status === 'running' ? theme.accentColor : status === 'failed' ? '#ef4444' : 'rgba(255,255,255,0.2)' }} />
+          {status}
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
+          <span>{files.length} files</span>
+          <span>{events.length} events</span>
+        </div>
+      </div>
+    </motion.div>
+  )
 }
 
 export default function AgentStagePage() {
@@ -354,21 +645,16 @@ export default function AgentStagePage() {
               )}
             </div>
 
-            {/* RIGHT — 40%: Accent orb (content is now in background) */}
-            <div style={{ flex: '0 0 40%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-              {/* Glow blob */}
-              <motion.div
-                animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0.7, 0.4] }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                style={{
-                  width: 320, height: 320, borderRadius: '50%',
-                  background: `radial-gradient(circle, ${theme.accentColor}30 0%, ${theme.accentColor}08 50%, transparent 70%)`,
-                  filter: 'blur(30px)',
-                }}
+            {/* RIGHT — 40%: IDE-like output panel */}
+            <div style={{ flex: '0 0 40%', display: 'flex', flexDirection: 'column', position: 'relative', maxHeight: '70vh' }}>
+              <IDEOutputPanel
+                files={files}
+                events={events}
+                agentKey={agentKey}
+                theme={theme}
+                status={status}
+                agentState={agentState}
               />
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <FigurineOrb accentColor={theme.accentColor} />
-              </div>
             </div>
           </div>
         </motion.section>

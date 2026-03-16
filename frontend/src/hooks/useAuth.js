@@ -1,30 +1,95 @@
-import { account } from '../lib/appwrite'
-import { useState, useEffect } from 'react'
-import { OAuthProvider } from 'appwrite'
+import { account } from "../lib/appwrite";
+import { useState, useEffect, useCallback } from "react";
+import { OAuthProvider } from "appwrite";
 
 export function useAuth() {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchUser = useCallback(async () => {
+    try {
+      const u = await account.get();
+      setUser(u);
+      setError(null);
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    account.get()
-      .then(u => setUser(u))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false))
-  }, [])
+    fetchUser();
+  }, [fetchUser]);
 
   const loginWithGitHub = () => {
     account.createOAuth2Session(
       OAuthProvider.Github,
-      window.location.origin + '/',
-      window.location.origin + '/login-error'
-    )
-  }
+      window.location.origin + "/",
+      window.location.origin + "/?auth=error",
+    );
+  };
+
+  const loginWithEmail = async (email, password) => {
+    setError(null);
+    try {
+      await account.createEmailPasswordSession(email, password);
+      await fetchUser();
+    } catch (e) {
+      setError(e.message || "Login failed");
+      throw e;
+    }
+  };
+
+  const signupWithEmail = async (email, password, name) => {
+    setError(null);
+    try {
+      await account.create("unique()", email, password, name);
+      await account.createEmailPasswordSession(email, password);
+      await fetchUser();
+    } catch (e) {
+      setError(e.message || "Signup failed");
+      throw e;
+    }
+  };
 
   const logout = async () => {
-    await account.deleteSession('current')
-    setUser(null)
-  }
+    try {
+      await account.deleteSession("current");
+    } catch {
+      // Session may already be expired
+    }
+    setUser(null);
+  };
 
-  return { user, loading, loginWithGitHub, logout }
+  /**
+   * Get a fresh Appwrite JWT for backend API calls.
+   * Throws if the session has expired — caller should handle and redirect to login.
+   */
+  const getJWT = useCallback(async () => {
+    try {
+      const jwt = await account.createJWT();
+      return jwt.jwt;
+    } catch (e) {
+      // Session expired or createJWT failed — clear local user state
+      console.warn(
+        "[useAuth] createJWT failed, session likely expired:",
+        e?.message,
+      );
+      setUser(null);
+      return null;
+    }
+  }, []);
+
+  return {
+    user,
+    loading,
+    error,
+    loginWithGitHub,
+    loginWithEmail,
+    signupWithEmail,
+    logout,
+    getJWT,
+  };
 }

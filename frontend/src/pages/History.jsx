@@ -44,22 +44,27 @@ export default function History() {
     const fetchJobs = async () => {
       try {
         const jwt = await getJWT()
+        if (!jwt) { navigate('/landing'); return }
         const data = await api('/api/jobs', {}, jwt)
         setJobs(Array.isArray(data) ? data : [])
       } catch (e) {
         console.error('Failed to fetch jobs:', e)
+        if (e.message?.includes('401') || e.message?.includes('Session expired')) {
+          navigate('/landing')
+        }
       } finally {
         setLoading(false)
       }
     }
     fetchJobs()
-  }, [user, getJWT])
+  }, [user, getJWT, navigate])
 
   const handleDelete = async (jobId) => {
     if (!confirm('Delete this project? This cannot be undone.')) return
     setDeleting(jobId)
     try {
       const jwt = await getJWT()
+      if (!jwt) { navigate('/landing'); return }
       await api(`/api/jobs/${jobId}`, { method: 'DELETE' }, jwt)
       setJobs(jobs.filter(j => (j.id || j.$id) !== jobId))
     } catch (e) {

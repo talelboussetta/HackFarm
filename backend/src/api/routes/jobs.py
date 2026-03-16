@@ -76,6 +76,8 @@ async def create_job(
                 "repoName": repo_name,
                 "repoPrivate": repo_private,
                 "retentionDays": retention_days,
+                "jobTitle": repo_name,
+                "priority": "low",
             }
         )
         publish(job["$id"], "job_queued", {"message": "Job queued due to concurrency limits"})
@@ -91,6 +93,8 @@ async def create_job(
             "repoName": repo_name,
             "repoPrivate": repo_private,
             "retentionDays": retention_days,
+            "jobTitle": repo_name,
+            "priority": "low",
         }
     )
 
@@ -122,7 +126,7 @@ async def list_jobs(
             "repo_name": j["repoName"],
             "repo_private": j["repoPrivate"],
             "github_url": j.get("githubUrl"),
-            "zip_path": j.get("zipPath"),
+            "zip_path": j.get("zipFileId"),
             "created_at": j["$createdAt"],
             "completed_at": j.get("completedAt"),
             "error_message": j.get("errorMessage"),
@@ -159,7 +163,7 @@ async def get_job(
         "repo_name": job["repoName"],
         "repo_private": job["repoPrivate"],
         "github_url": job.get("githubUrl"),
-        "zip_path": job.get("zipPath"),
+        "zip_path": job.get("zipFileId"),
         "error_message": job.get("errorMessage"),
         "created_at": job["$createdAt"],
         "completed_at": job.get("completedAt"),

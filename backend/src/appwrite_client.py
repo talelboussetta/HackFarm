@@ -19,11 +19,11 @@ users_service = Users(_client)
 
 def build_session_client(session_token: str) -> Client:
     """
-    Build a per-request client authenticated as the user (not as the server).
-    Used in dependencies.py to verify session tokens.
+    Build a per-request client authenticated as the user.
+    Accepts both JWT tokens (from account.createJWT()) and session tokens.
     """
     c = Client()
     c.set_endpoint(settings.APPWRITE_ENDPOINT)
     c.set_project(settings.APPWRITE_PROJECT_ID)
-    c.set_session(session_token)
+    c.set_jwt(session_token)
     return c

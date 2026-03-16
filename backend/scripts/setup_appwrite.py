@@ -192,6 +192,8 @@ def setup_jobs():
     create_string_attr(DATABASE_ID, coll_id, "status", 20, required=True, default="queued")
     create_string_attr(DATABASE_ID, coll_id, "inputType", 10, required=True)
     create_string_attr(DATABASE_ID, coll_id, "repoName", 100, required=True)
+    create_string_attr(DATABASE_ID, coll_id, "jobTitle", 100, required=True)
+    create_string_attr(DATABASE_ID, coll_id, "priority", 10, default="low")
     create_bool_attr(DATABASE_ID, coll_id, "repoPrivate", required=True, default=False)
     create_string_attr(DATABASE_ID, coll_id, "githubUrl", 200)
     create_string_attr(DATABASE_ID, coll_id, "zipFileId", 36)

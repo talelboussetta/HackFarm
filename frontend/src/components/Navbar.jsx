@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Layout, History, Settings, LogOut, Github, ChevronDown } from 'lucide-react'
+import { Layout, History, Settings, LogOut, ChevronDown } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import Button from './Button'
 
 export default function Navbar() {
-  const { user, loading, loginWithGitHub, logout } = useAuth()
+  const { user, loading, logout } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
 
@@ -104,7 +104,7 @@ export default function Navbar() {
                       </Link>
                       <div className="border-t border-white/5 my-1" />
                       <button
-                        onClick={() => { setDropdownOpen(false); logout() }}
+                        onClick={async () => { setDropdownOpen(false); await logout(); navigate('/landing') }}
                         className="flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 w-full transition-colors"
                       >
                         <LogOut size={16} /> Logout
@@ -113,19 +113,7 @@ export default function Navbar() {
                   )}
                 </AnimatePresence>
               </div>
-            ) : (
-              !loading && (
-                <Button 
-                  onClick={loginWithGitHub}
-                  variant="secondary" 
-                  size="sm"
-                  className="gap-2"
-                >
-                  <Github size={18} />
-                  Login with GitHub
-                </Button>
-              )
-            )}
+            ) : null}
           </div>
         </div>
       </div>

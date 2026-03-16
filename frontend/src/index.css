@@ -95,6 +95,17 @@ pre {
   display: none !important;
 }
 
+.react-flow__node.selected,
+.react-flow__node:focus,
+.react-flow__node:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node {
+  cursor: pointer !important;
+}
+
 /* ── Agent node pulse ring ── */
 @keyframes agent-pulse-ring {
   0% {

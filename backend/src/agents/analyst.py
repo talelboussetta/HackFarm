@@ -7,6 +7,7 @@ parses JSON response, returns dict of changed fields only.
 import json
 import logging
 import re
+import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -56,22 +57,57 @@ async def analyst(state: ProjectState) -> dict:
         "message": "Extracting features and constraints...",
     })
 
-    # Step 5: call LLM
-    try:
-        raw = await state["llm"].complete(prompt, response_format="json")
-    except RuntimeError as e:
-        publish(job_id, "agent_failed", {
-            "agent": "analyst", "error": str(e), "retry_count": 0,
-        })
-        if agent_run_id:
-            try:
-                databases.update_document(DB, "agent-runs", agent_run_id, {
-                    "status": "failed",
-                    "completedAt": datetime.now(timezone.utc).isoformat(),
+    # Step 5: call LLM with timeout + retry
+    raw = None
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            publish(job_id, "agent_thinking", {
+                "agent": "analyst",
+                "message": f"Calling LLM (attempt {attempt + 1})..." if attempt > 0 else "Calling LLM to analyze specification...",
+            })
+            raw = await asyncio.wait_for(
+                state["llm"].complete(prompt, response_format="json"),
+                timeout=120,
+            )
+            publish(job_id, "agent_thinking", {
+                "agent": "analyst",
+                "message": f"LLM responded ({len(raw)} chars), parsing JSON...",
+            })
+            break
+        except asyncio.TimeoutError:
+            log.warning(f"analyst: LLM call timed out (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1:
+                publish(job_id, "agent_thinking", {
+                    "agent": "analyst",
+                    "message": f"LLM timed out, retrying (attempt {attempt + 2})...",
                 })
-            except Exception:
-                pass
-        return {"errors": state.get("errors", []) + [f"analyst: {e}"]}
+                continue
+            publish(job_id, "agent_failed", {
+                "agent": "analyst", "error": "LLM call timed out after retries", "retry_count": max_retries,
+            })
+            if agent_run_id:
+                try:
+                    databases.update_document(DB, "agent-runs", agent_run_id, {
+                        "status": "failed",
+                        "completedAt": datetime.now(timezone.utc).isoformat(),
+                    })
+                except Exception:
+                    pass
+            return {"errors": state.get("errors", []) + ["analyst: LLM timed out"]}
+        except RuntimeError as e:
+            publish(job_id, "agent_failed", {
+                "agent": "analyst", "error": str(e), "retry_count": attempt,
+            })
+            if agent_run_id:
+                try:
+                    databases.update_document(DB, "agent-runs", agent_run_id, {
+                        "status": "failed",
+                        "completedAt": datetime.now(timezone.utc).isoformat(),
+                    })
+                except Exception:
+                    pass
+            return {"errors": state.get("errors", []) + [f"analyst: {e}"]}
 
     # Step 6: parse JSON safely
     try:

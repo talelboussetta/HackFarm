@@ -20,7 +20,7 @@ from src.api.dependencies import get_current_user
 from src.appwrite_client import databases
 from src.core.config import settings
 
-router = APIRouter(prefix="/settings", tags=["settings"])
+router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 ALLOWED_PROVIDERS = {"gemini", "groq", "openrouter"}
 
