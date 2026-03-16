@@ -31,6 +31,7 @@ frontend/dist/
 
 # IDE
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
@@ -50,6 +51,18 @@ n8n_data/
 
 # Logs
 *.log
-#images
+logs/
+
+# Temp / scratch files
+out.txt
+backend/out.txt
+truncate_file.py
+temp_truncate.js
+create_dirs.py
+
+# Images (large binary assets)
 images/
+
+# Lottie / animation assets (large binaries; serve from CDN or local public/)
 frontend/src/animations/
+# frontend/public/lottie/ — keep webm/json files tracked if needed
