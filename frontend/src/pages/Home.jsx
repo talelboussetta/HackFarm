@@ -7,7 +7,6 @@ import { useAuth } from '../hooks/useAuth'
 import { useJobSubmit } from '../hooks/useJobSubmit'
 import Button from '../components/Button'
 import Lottie from 'lottie-react'
-import heroAnim from '../animations/hero-ai.json'
 import submitAnim from '../animations/submit.json'
 
 export default function Home() {
@@ -71,7 +70,14 @@ export default function Home() {
           transition={{ duration: 0.5 }}
           className="w-[200px] h-[200px] md:w-[320px] md:h-[320px] flex-shrink-0"
         >
-          <Lottie animationData={heroAnim} loop={true} autoplay={true} style={{ width: '100%', height: '100%' }} />
+          <video
+            src="/lottie/ELzh3x62E1s4936hL4.webm"
+            autoPlay
+            loop
+            muted
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
         </motion.div>
         <div className="text-center md:text-left flex-1">
           <motion.h1

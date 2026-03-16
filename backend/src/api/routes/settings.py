@@ -11,10 +11,13 @@ Endpoints:
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from appwrite.query import Query
 from appwrite.id import ID
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from src.core.encryption import encrypt, decrypt
 from src.api.dependencies import get_current_user
@@ -22,6 +25,8 @@ from src.appwrite_client import databases
 from src.core.config import settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+limiter = Limiter(key_func=get_remote_address)
 
 ALLOWED_PROVIDERS = {"gemini", "groq", "openrouter"}
 
@@ -54,11 +59,15 @@ class KeyCreateRequest(BaseModel):
         return v
 
 
-def _mask_key(key: str) -> str:
-    """Show only the last 6 characters."""
-    if len(key) <= 6:
-        return "***"
-    return "***" + key[-6:]
+def _mask_key(raw_encrypted: str) -> str:
+    """Decrypt and mask — only last 6 chars survive."""
+    try:
+        full = decrypt(raw_encrypted)
+        if len(full) <= 6:
+            return "***"
+        return "***" + full[-6:]
+    except Exception:
+        return "***[corrupted]"
 
 
 # ── GET /settings/keys ────────────────────────────────────────
@@ -76,7 +85,7 @@ async def list_keys(
     return [
         {
             "provider": k["provider"],
-            "masked_key": _mask_key(decrypt(k["encryptedKey"])),
+            "masked_key": _mask_key(k["encryptedKey"]),
             "is_valid": k["isValid"],
             "last_used": k["lastUsed"] if k.get("lastUsed") else None,
         }
@@ -87,7 +96,9 @@ async def list_keys(
 # ── POST /settings/keys ──────────────────────────────────────
 
 @router.post("/keys")
+@limiter.limit("30/hour")
 async def upsert_key(
+    request: Request,
     body: KeyCreateRequest,
     user: dict = Depends(get_current_user),
 ):
@@ -124,7 +135,7 @@ async def upsert_key(
 
     return {
         "provider": updated["provider"],
-        "masked_key": _mask_key(body.key),
+        "masked_key": _mask_key(encrypted),
         "is_valid": updated["isValid"],
     }
 
@@ -156,7 +167,9 @@ async def delete_key(
 # ── POST /settings/keys/{provider}/test ───────────────────────
 
 @router.post("/keys/{provider}/test")
+@limiter.limit("20/hour")
 async def test_key(
+    request: Request,
     provider: str,
     user: dict = Depends(get_current_user),
 ):
@@ -219,4 +232,8 @@ async def test_key(
             db_id, "user-api-keys", doc["$id"],
             {"isValid": False}
         )
-        return {"valid": False, "error": str(exc)}
+        error_msg = str(exc)
+        # Sanitize: never leak key values in error messages
+        if decrypted_key and decrypted_key in error_msg:
+            error_msg = error_msg.replace(decrypted_key, "***")
+        return {"valid": False, "error": error_msg[:200]}

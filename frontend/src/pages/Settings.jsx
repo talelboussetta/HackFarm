@@ -16,6 +16,7 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { log } from '../lib/logger'
 import { api } from '../lib/api'
 import Button from '../components/Button'
 
@@ -48,7 +49,7 @@ export default function Settings() {
         const data = await api('/api/settings/keys', {}, jwt)
         setKeys(Array.isArray(data) ? data : [])
       } catch (e) {
-        console.error('Failed to fetch keys:', e)
+        log.error('Failed to fetch keys:', e)
       } finally {
         setLoading(false)
       }
@@ -71,7 +72,7 @@ export default function Settings() {
       setAddingProvider(null)
       setNewKey('')
     } catch (e) {
-      console.error('Failed to save key:', e)
+      log.error('Failed to save key:', e)
       setSaveError(e.message || 'Failed to save key')
     } finally {
       setSavingProvider(null)
@@ -85,7 +86,7 @@ export default function Settings() {
       setKeys(keys.filter(k => k.provider !== provider))
       setTestResults(prev => { const n = {...prev}; delete n[provider]; return n })
     } catch (e) {
-      console.error('Failed to delete key:', e)
+      log.error('Failed to delete key:', e)
     }
   }
 

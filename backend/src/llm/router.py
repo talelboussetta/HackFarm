@@ -7,6 +7,7 @@ providers to avoid rate limit stacking.
 
 import asyncio
 import logging
+import re
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
@@ -148,11 +149,19 @@ class LLMRouter:
                 content = response.choices[0].message.content
                 if content is None:
                     continue
+                result = content.strip()
+                # Strip markdown code fences that LLMs often wrap JSON in
+                if result.startswith("```"):
+                    # Remove opening fence (```json, ```JSON, ```, etc.)
+                    result = re.sub(r'^```\w*\s*\n?', '', result)
+                    # Remove closing fence
+                    result = re.sub(r'\n?```\s*$', '', result)
+                    result = result.strip()
                 logger.info(
                     f"[LLM] agent={agent_name or '?'} "
                     f"provider={name} tokens≈{len(prompt)//4}"
                 )
-                return content.strip()
+                return result
 
             except asyncio.TimeoutError:
                 logger.warning(f"[LLM] {name} timed out (45s)")

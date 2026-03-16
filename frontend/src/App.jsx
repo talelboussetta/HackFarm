@@ -8,6 +8,7 @@ import Job from './pages/Job';
 import History from './pages/History';
 import Settings from './pages/Settings';
 import AgentStagePage from './pages/AgentStagePage';
+import ErrorBoundary from './components/ErrorBoundary'
 
 const HomeWithLayout = () => <Layout><Home /></Layout>
 const JobWithLayout = () => <Layout><Job /></Layout>
@@ -33,9 +34,11 @@ function AppRoutes() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

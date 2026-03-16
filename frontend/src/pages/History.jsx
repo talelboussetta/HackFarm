@@ -17,6 +17,7 @@ import {
   Zap
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { log } from '../lib/logger'
 import { api } from '../lib/api'
 import Button from '../components/Button'
 
@@ -48,7 +49,7 @@ export default function History() {
         const data = await api('/api/jobs', {}, jwt)
         setJobs(Array.isArray(data) ? data : [])
       } catch (e) {
-        console.error('Failed to fetch jobs:', e)
+        log.error('Failed to fetch jobs:', e)
         if (e.message?.includes('401') || e.message?.includes('Session expired')) {
           navigate('/landing')
         }
@@ -68,7 +69,7 @@ export default function History() {
       await api(`/api/jobs/${jobId}`, { method: 'DELETE' }, jwt)
       setJobs(jobs.filter(j => (j.id || j.$id) !== jobId))
     } catch (e) {
-      console.error('Failed to delete job:', e)
+      log.error('Failed to delete job:', e)
     } finally {
       setDeleting(null)
     }

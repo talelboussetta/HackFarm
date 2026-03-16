@@ -29,6 +29,7 @@ python-dotenv==1.0.1
 
 # Utilities
 bleach==6.2.0
+slowapi==0.1.9
 
 # Appwrite (BaaS)
 appwrite>=6.0.0

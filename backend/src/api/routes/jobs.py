@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import asyncio, logging, re
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from appwrite.query import Query
 from appwrite.id import ID
 from src.api.dependencies import get_current_user
@@ -15,6 +15,16 @@ from src.ingestion.normalizer import normalize_to_initial_state
 from src.llm.router import LLMRouter
 from src.agents.graph import pipeline
 
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+
+ALLOWED_MIME = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 DB = settings.APPWRITE_DATABASE_ID
 log = logging.getLogger(__name__)
@@ -24,7 +34,9 @@ VALID_REPO_NAME = re.compile(r"^[a-zA-Z0-9_.-]+$")
 # ── POST /api/jobs ────────────────────────────────────────────
 
 @router.post("")
+@limiter.limit("10/hour")
 async def create_job(
+    request: Request,
     user: dict = Depends(get_current_user),
     file: UploadFile | None = File(None),
     prompt: str | None = Form(None),
@@ -43,6 +55,8 @@ async def create_job(
     # Validation 2: repo_name
     if not repo_name or not VALID_REPO_NAME.match(repo_name):
         raise HTTPException(400, "Invalid repo name (alphanumeric, hyphens, dots, underscores only)")
+    if len(repo_name) > 100:
+        raise HTTPException(400, "Repo name too long (max 100 characters)")
 
     # Validation 3: user must have at least one valid API key
     providers = get_user_llm_providers(user["id"])
@@ -51,7 +65,13 @@ async def create_job(
 
     # Parse input (do this before status check to fail early if invalid)
     if file:
+        # MIME type check
+        if file.content_type not in ALLOWED_MIME:
+            raise HTTPException(400, "Invalid file type")
         file_bytes = await file.read()
+        # File size check (10MB max)
+        if len(file_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(400, "File too large (max 10MB)")
         filename = file.filename or ""
         if filename.lower().endswith(".pdf"):
             raw_text = parse_pdf(file_bytes)
@@ -64,6 +84,11 @@ async def create_job(
     else:
         raw_text = prompt
         input_type = "text"
+
+    # Sanitize input text
+    raw_text = raw_text[:15000]
+    raw_text = raw_text.encode("utf-8", errors="ignore").decode("utf-8")
+    raw_text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw_text)
 
     # Validation 4: can user run a job right now?
     if not can_run_job(user["id"]):
@@ -256,7 +281,7 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
       # Run the pipeline
       result = await pipeline.ainvoke(state)
 
-      final_status = "partial" if result.get("errors") else "complete"
+      final_status = "failed" if result.get("errors") else "completed"
       error_msg = "; ".join(result.get("errors", [])[:3]) if result.get("errors") else None
       databases.update_document(DB, "jobs", job_id, {
           "status": final_status,
@@ -265,7 +290,7 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
           "errorMessage": error_msg
       })
       # Only emit job_failed for partial — github_agent already emits job_complete on success
-      if final_status == "partial":
+      if result.get("errors"):
           publish(job_id, "job_failed", {"error": error_msg or "Some agents failed", "last_agent": "unknown"})
     except Exception as e:
       log.error(f"Pipeline failed job={job_id}: {type(e).__name__}: {e}", exc_info=True)

@@ -6,6 +6,7 @@ Generates README, pitch slides, and architecture Mermaid diagram.
 import json
 import logging
 import re
+import bleach
 import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
@@ -161,11 +162,19 @@ async def _business_agent_impl(state: ProjectState) -> dict:
 
     # Step 7: extract fields with safe defaults
     readme_content = data.get("readme_content", f"# {state.get('project_name', 'Project')}\n")
+    ALLOWED_TAGS = ['p', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'strong', 'em', 'code', 'pre', 'br', 'a']
+    readme_content = bleach.clean(readme_content, tags=ALLOWED_TAGS, strip=True)
     pitch_slides = data.get("pitch_slides", [])
     architecture_mermaid = data.get("architecture_mermaid", "graph TD\n  A[User] --> B[App]")
 
     if not isinstance(pitch_slides, list):
         pitch_slides = []
+
+    for slide in pitch_slides:
+        if isinstance(slide, dict):
+            for field in ("title", "content", "speaker_notes"):
+                if field in slide and isinstance(slide[field], str):
+                    slide[field] = bleach.clean(slide[field], tags=ALLOWED_TAGS, strip=True)
 
     slide_count = len(pitch_slides)
 
@@ -184,7 +193,7 @@ async def _business_agent_impl(state: ProjectState) -> dict:
     if agent_run_id:
         try:
             databases.update_document(DB, "agent-runs", agent_run_id, {
-                "status": "done",
+                "status": "completed",
                 "completedAt": datetime.now(timezone.utc).isoformat(),
                 "outputSummary": f"Generated README, {slide_count} slides, architecture diagram",
             })

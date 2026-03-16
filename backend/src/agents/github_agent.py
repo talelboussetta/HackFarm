@@ -193,7 +193,7 @@ async def _github_agent_impl(state: ProjectState) -> dict:
     # Step 7: update job document
     try:
         update_data = {
-            "status": "complete",
+            "status": "completed",
             "githubUrl": github_url,
             "completedAt": datetime.now(timezone.utc).isoformat(),
         }
@@ -207,7 +207,7 @@ async def _github_agent_impl(state: ProjectState) -> dict:
     if agent_run_id:
         try:
             databases.update_document(DB, "agent-runs", agent_run_id, {
-                "status": "done",
+                "status": "completed",
                 "completedAt": datetime.now(timezone.utc).isoformat(),
                 "outputSummary": f"Pushed {len(all_files)} files to {full_name}",
             })
@@ -223,5 +223,5 @@ async def _github_agent_impl(state: ProjectState) -> dict:
 
     return {
         "github_url": github_url,
-        "status": "complete",
+        "status": "completed",
     }

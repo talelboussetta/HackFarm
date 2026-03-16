@@ -208,7 +208,7 @@ async def _backend_agent_impl(state: ProjectState) -> dict:
     if agent_run_id:
         try:
             databases.update_document(DB, "agent-runs", agent_run_id, {
-                "status": "done",
+                "status": "completed",
                 "completedAt": datetime.now(timezone.utc).isoformat(),
                 "outputSummary": f"Generated {file_count} files, {endpoint_count_final} endpoints",
             })

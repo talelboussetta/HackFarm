@@ -252,7 +252,7 @@ async def _validator_impl(state: ProjectState) -> dict:
     if agent_run_id:
         try:
             databases.update_document(DB, "agent-runs", agent_run_id, {
-                "status": "done",
+                "status": "completed",
                 "completedAt": datetime.now(timezone.utc).isoformat(),
                 "outputSummary": f"Score: {score}/100, {len(all_issues)} issues found",
             })

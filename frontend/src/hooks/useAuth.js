@@ -1,4 +1,5 @@
 import { account } from "../lib/appwrite";
+import { log } from "../lib/logger";
 import { useState, useEffect, useCallback } from "react";
 import { OAuthProvider } from "appwrite";
 
@@ -28,6 +29,7 @@ export function useAuth() {
       OAuthProvider.Github,
       window.location.origin + "/",
       window.location.origin + "/?auth=error",
+      ["repo", "read:user", "user:email"],
     );
   };
 
@@ -73,10 +75,7 @@ export function useAuth() {
       return jwt.jwt;
     } catch (e) {
       // Session expired or createJWT failed — clear local user state
-      console.warn(
-        "[useAuth] createJWT failed, session likely expired:",
-        e?.message,
-      );
+      log.warn("createJWT failed, session likely expired:", e?.message);
       setUser(null);
       return null;
     }

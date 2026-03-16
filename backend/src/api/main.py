@@ -4,10 +4,15 @@ HackFarmer — FastAPI application.
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from src.core.config import settings
 from src.core.queue_manager import start_queue_poller
@@ -19,23 +24,34 @@ from src.api.routes.stream import router as stream_router
 from src.api.routes.settings import router as settings_router
 from src.api.routes.downloads import router as downloads_router
 
+# ── Logging ───────────────────────────────────────────────────
+if os.getenv("ENVIRONMENT") == "production":
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+else:
+    logging.basicConfig(level=logging.INFO)
+
 log = logging.getLogger(__name__)
+
+# ── Rate limiter ──────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
-    # Startup
     try:
         databases.list_collections(settings.APPWRITE_DATABASE_ID)
-        print("✓ Appwrite connected")
+        log.info("Appwrite connected")
     except Exception as e:
-        print(f"✗ Appwrite connection failed: {e}")
+        log.error(f"Appwrite connection failed: {e}")
 
     poller_task = asyncio.create_task(start_queue_poller())
-
     yield
-
-    # Shutdown
     poller_task.cancel()
     try:
         await poller_task
@@ -50,19 +66,56 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.appwrite_project_id = settings.APPWRITE_PROJECT_ID
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS
+# ── CORS ──────────────────────────────────────────────────────
+ALLOWED_ORIGINS = [o.strip() for o in settings.FRONTEND_URL.split(",") if o.strip()]
+if not ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS = ["http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Appwrite-Session", "Cookie", "Authorization"],
 )
+
+
+# ── Security headers middleware ───────────────────────────────
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+    if os.getenv("ENVIRONMENT") == "production":
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+    return response
+
+
+# ── Global exception handler ─────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    if os.getenv("ENVIRONMENT", "development") == "production":
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)[:200]},
+    )
+
 
 # ── Routes ────────────────────────────────────────────────────
 app.include_router(auth_router)
-app.include_router(jobs_router) # jobs_router has its own prefix now
+app.include_router(jobs_router)
 app.include_router(stream_router, prefix="/stream", tags=["stream"])
 app.include_router(settings_router)
 app.include_router(downloads_router, prefix="/api/downloads", tags=["downloads"])
@@ -71,6 +124,7 @@ app.include_router(downloads_router, prefix="/api/downloads", tags=["downloads"]
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
 
 @app.get("/internal/health")
 async def internal_health():

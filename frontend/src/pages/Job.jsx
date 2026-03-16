@@ -11,6 +11,8 @@ import Lottie from 'lottie-react'
 import celebrationAnim from '../animations/celebration.json'
 import confetti from 'canvas-confetti'
 import Button from '../components/Button'
+import DOMPurify from 'dompurify'
+import { log } from '../lib/logger'
 
 const AGENT_KEYS = ['analyst','architect','frontend_agent','backend_agent','business_agent','integrator','validator','github_agent']
 
@@ -34,7 +36,7 @@ function MermaidDiagram({ chart }) {
       const mermaid = mod.default
       mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { darkMode: true } })
       mermaid.render('mermaid-' + Date.now(), chart).then(({ svg }) => {
-        if (!cancelled) setSvg(svg)
+        if (!cancelled) setSvg(DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } }))
       }).catch(() => {})
     })
     return () => { cancelled = true }
@@ -172,7 +174,7 @@ export default function Job() {
       await api(`/api/jobs/${id}`, { method: 'DELETE' }, jwt)
       navigate('/history')
     } catch (e) {
-      console.error('Delete failed:', e)
+      log.error('Delete failed:', e)
       setDeleting(false)
     }
   }

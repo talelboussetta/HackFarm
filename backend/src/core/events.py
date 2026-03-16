@@ -50,7 +50,7 @@ def publish(job_id: str, event_type: str, payload: dict) -> None:
             
             status_map = {
                 "agent_start": "running",
-                "agent_done": "done",
+                "agent_done": "completed",
                 "agent_failed": "failed"
             }
             

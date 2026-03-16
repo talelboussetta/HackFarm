@@ -180,6 +180,7 @@ def setup_jobs():
         database_id=DATABASE_ID,
         collection_id=coll_id,
         name="Jobs",
+        document_security=True,
         permissions=[
             Permission.read(Role.users()),
             Permission.create(Role.users()),
@@ -213,6 +214,7 @@ def setup_agent_runs():
             database_id=DATABASE_ID,
             collection_id=coll_id,
             name="Agent Runs",
+            document_security=True,
             permissions=[
                 Permission.read(Role.users()),
                 Permission.create(Role.users()),
@@ -225,7 +227,7 @@ def setup_agent_runs():
 
     create_string_attr(DATABASE_ID, coll_id, "jobId", 36, required=True)
     create_string_attr(DATABASE_ID, coll_id, "agentName", 30, required=True)
-    create_string_attr(DATABASE_ID, coll_id, "status", 20, default="waiting")
+    create_string_attr(DATABASE_ID, coll_id, "status", 20, default="queued")
     create_int_attr(DATABASE_ID, coll_id, "retryCount", default=0)
     create_int_attr(DATABASE_ID, coll_id, "runDuration", default=0)
     create_string_attr(DATABASE_ID, coll_id, "outputFormat", 20, default="json")
@@ -247,6 +249,7 @@ def setup_user_api_keys():
         database_id=DATABASE_ID,
         collection_id=coll_id,
         name="User API Keys",
+        document_security=True,
         permissions=[
             Permission.read(Role.users()),
             Permission.create(Role.users()),
@@ -275,6 +278,7 @@ def setup_job_events():
             database_id=DATABASE_ID,
             collection_id=coll_id,
             name="Job Events",
+            document_security=True,
             permissions=[
                 Permission.read(Role.users()),
                 Permission.create(Role.users()),
