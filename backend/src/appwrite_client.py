@@ -20,7 +20,7 @@ users_service = Users(_client)
 def build_session_client(session_token: str) -> Client:
     """
     Build a per-request client authenticated as the user.
-    Accepts both JWT tokens (from account.createJWT()) and session tokens.
+    Accepts JWT tokens (from account.createJWT()) — sent as X-Appwrite-Session header.
     """
     c = Client()
     c.set_endpoint(settings.APPWRITE_ENDPOINT)

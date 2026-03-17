@@ -3,6 +3,35 @@ import { log } from "../lib/logger";
 import { useState, useEffect, useCallback } from "react";
 import { OAuthProvider } from "appwrite";
 
+// ── Module-level JWT cache (shared across ALL useAuth() instances) ──
+// Prevents simultaneous createJWT() calls from hitting Appwrite rate limits.
+let _cachedJWT = null;
+let _jwtCreatedAt = 0;
+let _jwtInflight = null; // deduplicate concurrent createJWT() calls
+const JWT_TTL_MS = 10 * 60 * 1000; // reuse for 10 min (JWT expires at 15 min)
+
+async function _getOrCreateJWT() {
+  const now = Date.now();
+  if (_cachedJWT && now - _jwtCreatedAt < JWT_TTL_MS) return _cachedJWT;
+  // Deduplicate: if a createJWT call is already in flight, await it
+  if (_jwtInflight) return _jwtInflight;
+  _jwtInflight = account
+    .createJWT()
+    .then((r) => {
+      _cachedJWT = r.jwt;
+      _jwtCreatedAt = Date.now();
+      _jwtInflight = null;
+      return _cachedJWT;
+    })
+    .catch((e) => {
+      _cachedJWT = null;
+      _jwtCreatedAt = 0;
+      _jwtInflight = null;
+      throw e;
+    });
+  return _jwtInflight;
+}
+
 export function useAuth() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -27,7 +56,7 @@ export function useAuth() {
   const loginWithGitHub = () => {
     account.createOAuth2Session(
       OAuthProvider.Github,
-      window.location.origin + "/",
+      window.location.origin + "/app",
       window.location.origin + "/?auth=error",
       ["repo", "read:user", "user:email"],
     );
@@ -57,6 +86,8 @@ export function useAuth() {
   };
 
   const logout = async () => {
+    _cachedJWT = null;
+    _jwtCreatedAt = 0;
     try {
       await account.deleteSession("current");
     } catch {
@@ -66,16 +97,15 @@ export function useAuth() {
   };
 
   /**
-   * Get a fresh Appwrite JWT for backend API calls.
-   * Throws if the session has expired — caller should handle and redirect to login.
+   * Get a cached Appwrite JWT for backend API calls.
+   * Reuses the same JWT for up to 10 minutes to avoid rate limits.
+   * Returns null if session is invalid — caller should redirect to login.
    */
   const getJWT = useCallback(async () => {
     try {
-      const jwt = await account.createJWT();
-      return jwt.jwt;
+      return await _getOrCreateJWT();
     } catch (e) {
-      // Session expired or createJWT failed — clear local user state
-      log.warn("createJWT failed, session likely expired:", e?.message);
+      log.warn("getJWT failed:", e?.message);
       setUser(null);
       return null;
     }
