@@ -490,9 +490,8 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
           "githubUrl": result.get("github_url", ""),
           "completedAt": datetime.now(timezone.utc).isoformat(),
           "errorMessage": error_msg,
-          "tokenUsage": token_usage_str,
       })
-      # Only emit job_failed for partial — github_agent already emits job_complete on success
+      log.info(f"Pipeline done job={job_id} status={final_status} {token_usage_str}")
       if result.get("errors"):
           publish(job_id, "job_failed", {"error": error_msg or "Some agents failed", "last_agent": "unknown"})
     except Exception as e:
@@ -585,8 +584,8 @@ async def run_refine_task(job_id, user_id, original_prompt, feedback,
           "githubUrl": result.get("github_url", ""),
           "completedAt": datetime.now(timezone.utc).isoformat(),
           "errorMessage": error_msg,
-          "tokenUsage": token_usage_str,
       })
+      log.info(f"Refinement done job={job_id} status={final_status} {token_usage_str}")
       if result.get("errors"):
           publish(job_id, "job_failed", {"error": error_msg or "Refinement failed", "last_agent": "unknown"})
     except Exception as e:

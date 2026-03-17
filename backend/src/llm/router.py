@@ -98,6 +98,8 @@ class LLMRouter:
         if not self._clients:
             raise ValueError("No valid LLM providers configured")
 
+        logger.info(f"[LLM] Router initialized with providers: {list(self._clients.keys())}")
+
     def _get_ordered_clients(self, agent_name: str | None) -> list[tuple]:
         """
         Return clients in the preferred order for this agent.
@@ -142,6 +144,7 @@ class LLMRouter:
             )
 
         ordered = self._get_ordered_clients(agent_name)
+        logger.info(f"[LLM] agent={agent_name} trying providers: {[n for n,_ in ordered]}")
 
         for name, info in ordered:
             client = info["client"]
