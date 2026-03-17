@@ -156,7 +156,6 @@ class TestJobsNoKeyExposure:
                     "repoName": "test-repo",
                     "repoPrivate": False,
                     "githubUrl": "https://github.com/test/test-repo",
-                    "zipFileId": None,
                     "$createdAt": "2024-01-01T00:00:00Z",
                     "completedAt": "2024-01-01T00:05:00Z",
                     "errorMessage": None,
@@ -228,7 +227,6 @@ class TestIDORProtection:
             "$id": "job1",
             "userId": "OTHER_USER_ID",
             "status": "completed",
-            "zipFileId": "zip1",
         }
         with patch("src.api.routes.downloads.databases") as mock_db:
             mock_db.get_document.return_value = mock_job

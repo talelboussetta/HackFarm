@@ -50,8 +50,39 @@ def _promote_sync() -> list[str]:
     return promoted
 
 async def promote_queued_jobs() -> list[str]:
-    """Run the blocking Appwrite calls in a thread with a timeout."""
-    return await asyncio.wait_for(asyncio.to_thread(_promote_sync), timeout=15.0)
+    """Promote queued jobs and spawn their pipelines as background tasks."""
+    promoted = await asyncio.wait_for(asyncio.to_thread(_promote_sync), timeout=15.0)
+    if not promoted:
+        return promoted
+
+    # Lazy import avoids circular imports.
+    from src.api.routes.jobs import run_pipeline_task
+
+    for job_id in promoted:
+        try:
+            job = await asyncio.wait_for(
+                asyncio.to_thread(
+                    databases.get_document,
+                    settings.APPWRITE_DATABASE_ID,
+                    "jobs",
+                    job_id,
+                ),
+                timeout=10.0,
+            )
+            asyncio.create_task(
+                run_pipeline_task(
+                    job_id,
+                    job["userId"],
+                    job.get("rawText", ""),
+                    job.get("inputType", "text"),
+                    job.get("repoName", "project"),
+                    job.get("repoPrivate", False),
+                    job.get("retentionDays", 30),
+                )
+            )
+        except Exception as e:
+            logging.warning(f"[Queue] Failed to start promoted job {job_id}: {e}")
+    return promoted
 
 async def start_queue_poller() -> None:
     """Poll every 30 seconds, promoting queued jobs for eligible users using Appwrite."""

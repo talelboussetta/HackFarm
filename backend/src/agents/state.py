@@ -29,3 +29,4 @@ class ProjectState(TypedDict):
     github_url: Optional[str]
     repo_name: str
     repo_private: bool
+    refinement_feedback: Optional[str]
