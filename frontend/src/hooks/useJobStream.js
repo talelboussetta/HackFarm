@@ -23,14 +23,16 @@ export function useJobStream(jobId) {
         Query.orderAsc("$createdAt"),
         Query.limit(200),
       ])
-      .then((res) =>
+      .then((res) => {
         res.documents.forEach((d) => {
           try {
             handleEvent(d.eventType, JSON.parse(d.payload));
             lastDocIdRef.current = d.$id;
-          } catch (e) {}
-        }),
-      );
+          } catch (e) {
+            // ignore parse/handler errors when replaying history
+          }
+        });
+      });
 
     // 2. Subscribe to live events via Appwrite Realtime
     unsubRef.current = appwriteClient.subscribe(
@@ -42,7 +44,9 @@ export function useJobStream(jobId) {
         try {
           handleEvent(doc.eventType, JSON.parse(doc.payload));
           lastDocIdRef.current = doc.$id;
-        } catch (e) {}
+        } catch (e) {
+          // ignore malformed realtime payloads
+        }
       },
     );
     // 3. Fallback poller in case Realtime drops (keeps graph live without user interaction)
@@ -67,7 +71,9 @@ export function useJobStream(jobId) {
           try {
             handleEvent(d.eventType, JSON.parse(d.payload));
             lastDocIdRef.current = d.$id;
-          } catch (e) {}
+          } catch (e) {
+            // ignore parse/handler errors when replaying history
+          }
         });
       } catch (err) {
         // Swallow poll errors; Realtime will likely still be active
@@ -125,6 +131,13 @@ export function useJobStream(jobId) {
     if (type === "job_complete") {
       setJobStatus("complete");
       setResult(payload);
+      // If Realtime missed business_agent, hydrate from completion payload
+      setBusinessContent((prev) => ({
+        readme_content: payload.readme_content || prev.readme_content || "",
+        architecture_mermaid:
+          payload.architecture_mermaid || prev.architecture_mermaid || "",
+        pitch_slides: payload.pitch_slides || prev.pitch_slides || [],
+      }));
       jobStatusRef.current = "complete";
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);

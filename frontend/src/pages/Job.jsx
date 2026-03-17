@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight, Trash2, XCircle, RotateCcw } from 'lucide-react'
+import { Github, Copy, Check, Loader2, AlertCircle, ChevronRight, Trash2, XCircle, RotateCcw } from 'lucide-react'
 import { useJobStream } from '../hooks/useJobStream'
 import { useAuth } from '../hooks/useAuth'
 import { api } from '../lib/api'
@@ -151,7 +151,7 @@ export default function Job() {
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   const handleCopyUrl = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); toast.success('URL copied to clipboard'); setTimeout(() => setCopied(false), 2000) }
-  const handleDownload = () => { window.open(`/api/downloads/${id}`, '_blank'); toast.success('Download started') }
+  // Download removed (ZIP generation disabled)
 
   const handleDelete = async () => {
     const label = jobStatus === 'running' || jobStatus === 'queued' ? 'Cancel this running job' : 'Delete this project'
@@ -238,7 +238,6 @@ export default function Job() {
         {/* Timer + status + delete */}
         <div className="flex items-center gap-3 text-sm">
           <span className="text-white/40 tabular-nums font-mono text-xs">{formatTime(elapsed)}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
             jobStatus === 'complete' ? 'bg-green-500/20 text-green-400' : jobStatus === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'
           }`}>
             {jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'}

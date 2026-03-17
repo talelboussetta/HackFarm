@@ -494,6 +494,16 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
       log.info(f"Pipeline done job={job_id} status={final_status} {token_usage_str}")
       if result.get("errors"):
           publish(job_id, "job_failed", {"error": error_msg or "Some agents failed", "last_agent": "unknown"})
+      else:
+          publish(job_id, "job_complete", {
+              "github_url": result.get("github_url"),
+              "zip_file_id": result.get("zip_file_id"),
+              "repo_name": repo_name,
+              "token_usage": usage,
+              "architecture_mermaid": result.get("architecture_mermaid"),
+              "readme_content": result.get("readme_content"),
+              "pitch_slides": result.get("pitch_slides"),
+          })
     except Exception as e:
       log.error(f"Pipeline failed job={job_id}: {type(e).__name__}: {e}", exc_info=True)
       error_str = f"{type(e).__name__}: {str(e)[:400]}"
