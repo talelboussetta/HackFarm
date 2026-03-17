@@ -6,8 +6,8 @@
 const BASE_URL = "";
 
 export async function api(path, options = {}, jwt = null) {
-  if (jwt === null && !options._noAuth) {
-    // Caller got null JWT (session expired) — don't bother hitting the backend
+  if (!jwt && !options._noAuth) {
+    // Caller got null/undefined JWT (session expired) — don't bother hitting the backend
     throw new Error("Session expired — please log in again");
   }
 

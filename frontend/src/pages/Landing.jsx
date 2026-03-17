@@ -96,10 +96,11 @@ const inView = (i = 0) => ({ initial: { opacity: 0, y: 30 }, whileInView: { opac
 
 /* ────────────────────────────────────────────────────── */
 export default function Landing() {
-  const { loginWithGitHub, loginWithEmail, signupWithEmail, error: authError } = useAuth()
+  const { user, loginWithGitHub, loginWithEmail, signupWithEmail, error: authError } = useAuth()
   const navigate = useNavigate()
 
-  /* auth modal state (preserved) */
+  /* if already logged in, show a banner to go to app */
+  /* auth modal state */
   const [authMode, setAuthMode] = useState(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -254,14 +255,14 @@ export default function Landing() {
             >{s}</button>
           ))}
         </div>
-        <button onClick={loginWithGitHub} style={{
+        <button onClick={user ? () => navigate('/app') : loginWithGitHub} style={{
           background: '#000', color: lime, border: `1px solid ${lime}`, borderRadius: 8,
           padding: '8px 18px', fontSize: 13, fontFamily: outfit, fontWeight: 500, cursor: 'pointer',
           transition: 'background 0.2s, color 0.2s',
         }}
         onMouseEnter={e => { e.target.style.background = lime; e.target.style.color = '#000' }}
         onMouseLeave={e => { e.target.style.background = '#000'; e.target.style.color = lime }}
-        >Start Building →</button>
+        >{user ? 'Open App →' : 'Start Building →'}</button>
       </nav>
 
       {/* ── Mobile nav (logo + CTA only) ── */}
@@ -337,14 +338,14 @@ export default function Landing() {
 
           {/* CTAs */}
           <motion.div {...stagger(3)} style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 48 }}>
-            <button onClick={loginWithGitHub} style={{
+            <button onClick={user ? () => navigate('/app') : loginWithGitHub} style={{
               background: lime, color: '#000', border: 'none', borderRadius: 12,
               padding: '16px 36px', fontSize: 16, fontFamily: outfit, fontWeight: 500, cursor: 'pointer',
               transition: 'transform 0.2s, box-shadow 0.2s',
             }}
             onMouseEnter={e => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = `0 8px 30px ${lime}33` }}
             onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = 'none' }}
-            >Generate a project →</button>
+            >{user ? `Welcome back, ${user.name?.split(' ')[0] || 'builder'} → Open App` : 'Generate a project →'}</button>
             <a href="https://github.com/talelboussetta/HackFarm" target="_blank" rel="noreferrer" style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.2)',
@@ -669,14 +670,14 @@ export default function Landing() {
             Your next hackathon project, fully generated, pushed to GitHub, ready to demo.
           </motion.p>
           <motion.div {...inView(2)}>
-            <button onClick={loginWithGitHub} style={{
+            <button onClick={user ? () => navigate('/app') : loginWithGitHub} style={{
               background: lime, color: '#000', border: 'none', borderRadius: 16,
               padding: '22px 56px', fontSize: 20, fontFamily: outfit, fontWeight: 500, cursor: 'pointer',
               transition: 'transform 0.2s, box-shadow 0.2s',
             }}
             onMouseEnter={e => { e.target.style.transform = 'translateY(-3px)'; e.target.style.boxShadow = `0 12px 40px ${lime}44` }}
             onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = 'none' }}
-            >Generate your first project →</button>
+            >{user ? 'Open App →' : 'Generate your first project →'}</button>
           </motion.div>
           <motion.p {...inView(3)} style={{
             fontFamily: outfit, fontWeight: 400, fontSize: 14, color: 'rgba(255,255,255,0.3)',

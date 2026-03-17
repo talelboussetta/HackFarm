@@ -10,6 +10,17 @@ let _jwtCreatedAt = 0;
 let _jwtInflight = null; // deduplicate concurrent createJWT() calls
 const JWT_TTL_MS = 10 * 60 * 1000; // reuse for 10 min (JWT expires at 15 min)
 
+/** Read the Appwrite session secret from localStorage (set by SDK as cookieFallback). */
+function _getSessionFromStorage() {
+  try {
+    const projectId = import.meta.env.VITE_APPWRITE_PROJECT_ID;
+    const fallback = JSON.parse(localStorage.getItem("cookieFallback") || "{}");
+    return fallback[`a_session_${projectId}`] || null;
+  } catch {
+    return null;
+  }
+}
+
 async function _getOrCreateJWT() {
   const now = Date.now();
   if (_cachedJWT && now - _jwtCreatedAt < JWT_TTL_MS) return _cachedJWT;
@@ -18,15 +29,32 @@ async function _getOrCreateJWT() {
   _jwtInflight = account
     .createJWT()
     .then((r) => {
-      _cachedJWT = r.jwt;
+      // r.jwt should be a string; guard against undefined/empty
+      const token = r?.jwt;
+      if (!token) {
+        // Fall back to session token from localStorage
+        const session = _getSessionFromStorage();
+        if (!session) throw new Error("createJWT returned empty token and no session in storage");
+        _cachedJWT = session;
+      } else {
+        _cachedJWT = token;
+      }
       _jwtCreatedAt = Date.now();
       _jwtInflight = null;
       return _cachedJWT;
     })
     .catch((e) => {
+      _jwtInflight = null;
+      // Try localStorage session as fallback before giving up
+      const session = _getSessionFromStorage();
+      if (session) {
+        log.warn("createJWT failed, using session token fallback:", e?.message);
+        _cachedJWT = session;
+        _jwtCreatedAt = Date.now();
+        return _cachedJWT;
+      }
       _cachedJWT = null;
       _jwtCreatedAt = 0;
-      _jwtInflight = null;
       throw e;
     });
   return _jwtInflight;
