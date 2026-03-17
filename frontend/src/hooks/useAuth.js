@@ -167,7 +167,18 @@ export function useAuth() {
    */
   const getJWT = useCallback(async () => {
     try {
-      return await _getOrCreateJWT();
+      const token = await _getOrCreateJWT();
+      // Debug: verify the token works against the backend
+      if (token) {
+        fetch("/auth/me", { headers: { "X-Appwrite-Session": token } })
+          .then(r => r.json())
+          .then(d => {
+            if (!d.ok) log.warn("getJWT debug /auth/me:", d);
+            else log.info("getJWT debug: token accepted for user", d.user?.name);
+          })
+          .catch(() => {});
+      }
+      return token;
     } catch (e) {
       log.warn("getJWT failed:", e?.message);
       setUser(null);
