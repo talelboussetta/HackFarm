@@ -139,16 +139,24 @@ async def _architect_impl(state: ProjectState) -> dict:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if match:
-            try:
-                data = json.loads(match.group())
-            except json.JSONDecodeError:
+        # Try stripping markdown code fences first
+        cleaned = re.sub(r'^```\w*\s*\n?', '', raw.strip())
+        cleaned = re.sub(r'\n?```\s*$', '', cleaned).strip()
+        try:
+            data = json.loads(cleaned)
+        except json.JSONDecodeError:
+            # Try extracting the outermost JSON object
+            match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+            if match:
+                try:
+                    data = json.loads(match.group())
+                except json.JSONDecodeError:
+                    data = None
+            else:
                 data = None
-        else:
-            data = None
 
     if data is None:
+        log.error(f"architect: non-JSON response (first 500 chars): {raw[:500]}")
         error_msg = "architect: LLM returned non-JSON response"
         publish(job_id, "agent_failed", {
             "agent": "architect", "error": error_msg, "retry_count": 0,

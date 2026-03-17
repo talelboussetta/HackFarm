@@ -207,7 +207,23 @@ async def test_key(
                     "max_tokens": 10,
                 },
             )
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                # Parse error message from provider
+                try:
+                    err_data = resp.json()
+                    if isinstance(err_data, list):
+                        err_data = err_data[0]
+                    err_msg = err_data.get("error", {}).get("message", resp.text[:200])
+                except Exception:
+                    err_msg = resp.text[:200]
+                # Don't mark as invalid for rate limits (429) — key is still valid
+                if resp.status_code != 429:
+                    databases.update_document(
+                        db_id, "user-api-keys", doc["$id"],
+                        {"isValid": False}
+                    )
+                return {"valid": False, "error": f"[{resp.status_code}] {err_msg}"}
+
             data = resp.json()
             content = data["choices"][0]["message"]["content"].strip().lower()
 
