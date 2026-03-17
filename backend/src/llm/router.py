@@ -149,93 +149,101 @@ class LLMRouter:
         for name, info in ordered:
             client = info["client"]
             model = info["model"]
-            try:
-                response = await asyncio.wait_for(
-                    client.chat.completions.create(
-                        model=model,
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=temperature,
-                    ),
-                    timeout=45.0,
-                )
-                content = response.choices[0].message.content
-                if content is None:
-                    continue
-                result = content.strip()
-                # Strip markdown code fences that LLMs often wrap JSON in
-                if result.startswith("```"):
-                    # Remove opening fence (```json, ```JSON, ```, etc.)
-                    result = re.sub(r'^```\w*\s*\n?', '', result)
-                    # Remove closing fence
-                    result = re.sub(r'\n?```\s*$', '', result)
-                    result = result.strip()
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = await asyncio.wait_for(
+                        client.chat.completions.create(
+                            model=model,
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=temperature,
+                        ),
+                        timeout=45.0,
+                    )
+                    content = response.choices[0].message.content
+                    if content is None:
+                        continue
+                    result = content.strip()
+                    # Strip markdown code fences that LLMs often wrap JSON in
+                    if result.startswith("```"):
+                        result = re.sub(r'^```\w*\s*\n?', '', result)
+                        result = re.sub(r'\n?```\s*$', '', result)
+                        result = result.strip()
 
-                # Track token usage from API response
-                usage = getattr(response, "usage", None)
-                input_tokens = getattr(usage, "prompt_tokens", 0) or 0
-                output_tokens = getattr(usage, "completion_tokens", 0) or 0
-                self._total_input_tokens += input_tokens
-                self._total_output_tokens += output_tokens
-                self._call_count += 1
+                    # Track token usage from API response
+                    usage = getattr(response, "usage", None)
+                    input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                    output_tokens = getattr(usage, "completion_tokens", 0) or 0
+                    self._total_input_tokens += input_tokens
+                    self._total_output_tokens += output_tokens
+                    self._call_count += 1
 
-                logger.info(
-                    f"[LLM] agent={agent_name or '?'} "
-                    f"provider={name} in={input_tokens} out={output_tokens}"
-                )
+                    logger.info(
+                        f"[LLM] agent={agent_name or '?'} "
+                        f"provider={name} in={input_tokens} out={output_tokens}"
+                    )
 
-                # Validate JSON responses — retry once on parse failure
-                if response_format == "json":
-                    try:
-                        json.loads(result)
-                    except (json.JSONDecodeError, ValueError):
-                        logger.warning(
-                            f"[LLM] {name} returned invalid JSON for "
-                            f"agent={agent_name}, retrying..."
-                        )
-                        # One retry with stronger instruction
+                    # Validate JSON responses — retry once on parse failure
+                    if response_format == "json":
                         try:
-                            retry_response = await asyncio.wait_for(
-                                client.chat.completions.create(
-                                    model=model,
-                                    messages=[
-                                        {"role": "user", "content": prompt},
-                                        {"role": "assistant", "content": result},
-                                        {"role": "user", "content": "That was not valid JSON. Return ONLY a valid JSON object, nothing else."},
-                                    ],
-                                    temperature=0.1,
-                                ),
-                                timeout=45.0,
+                            json.loads(result)
+                        except (json.JSONDecodeError, ValueError):
+                            logger.warning(
+                                f"[LLM] {name} returned invalid JSON for "
+                                f"agent={agent_name}, retrying..."
                             )
-                            retry_content = retry_response.choices[0].message.content
-                            if retry_content:
-                                retry_result = retry_content.strip()
-                                if retry_result.startswith("```"):
-                                    retry_result = re.sub(r'^```\w*\s*\n?', '', retry_result)
-                                    retry_result = re.sub(r'\n?```\s*$', '', retry_result)
-                                    retry_result = retry_result.strip()
-                                json.loads(retry_result)  # validate
-                                result = retry_result
-                                r_usage = getattr(retry_response, "usage", None)
-                                self._total_input_tokens += getattr(r_usage, "prompt_tokens", 0) or 0
-                                self._total_output_tokens += getattr(r_usage, "completion_tokens", 0) or 0
-                                self._call_count += 1
-                        except Exception:
-                            pass  # let the agent handle the invalid JSON
+                            try:
+                                retry_response = await asyncio.wait_for(
+                                    client.chat.completions.create(
+                                        model=model,
+                                        messages=[
+                                            {"role": "user", "content": prompt},
+                                            {"role": "assistant", "content": result},
+                                            {"role": "user", "content": "That was not valid JSON. Return ONLY a valid JSON object, nothing else."},
+                                        ],
+                                        temperature=0.1,
+                                    ),
+                                    timeout=45.0,
+                                )
+                                retry_content = retry_response.choices[0].message.content
+                                if retry_content:
+                                    retry_result = retry_content.strip()
+                                    if retry_result.startswith("```"):
+                                        retry_result = re.sub(r'^```\w*\s*\n?', '', retry_result)
+                                        retry_result = re.sub(r'\n?```\s*$', '', retry_result)
+                                        retry_result = retry_result.strip()
+                                    json.loads(retry_result)  # validate
+                                    result = retry_result
+                                    r_usage = getattr(retry_response, "usage", None)
+                                    self._total_input_tokens += getattr(r_usage, "prompt_tokens", 0) or 0
+                                    self._total_output_tokens += getattr(r_usage, "completion_tokens", 0) or 0
+                                    self._call_count += 1
+                            except Exception:
+                                pass  # let the agent handle the invalid JSON
 
-                return result
+                    return result
 
-            except asyncio.TimeoutError:
-                logger.warning(f"[LLM] {name} timed out (45s)")
-                continue
-            except Exception as e:
-                msg = str(e).lower()
-                if "429" in msg or "rate_limit" in msg or "rate limit" in msg:
-                    logger.warning(f"[LLM] {name} rate limited — trying next")
-                elif "401" in msg or "auth" in msg or "api key" in msg or "invalid" in msg:
-                    logger.error(f"[LLM] {name} auth error (bad API key?): {e}")
-                else:
-                    logger.error(f"[LLM] {name} failed: {type(e).__name__}: {e}")
-                continue
+                except asyncio.TimeoutError:
+                    logger.warning(f"[LLM] {name} timed out (45s), attempt {attempt+1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    break  # move to next provider
+                except Exception as e:
+                    msg = str(e).lower()
+                    if "429" in msg or "rate_limit" in msg or "rate limit" in msg:
+                        wait = 2 ** (attempt + 1)  # 2, 4, 8 seconds
+                        logger.warning(f"[LLM] {name} rate limited — retry {attempt+1}/{max_retries} in {wait}s")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(wait)
+                            continue
+                        break  # move to next provider
+                    elif "401" in msg or "auth" in msg or "api key" in msg or "invalid" in msg:
+                        logger.error(f"[LLM] {name} auth error (bad API key?): {e}")
+                        break  # skip retries, this provider's key is bad
+                    else:
+                        logger.error(f"[LLM] {name} failed: {type(e).__name__}: {e}")
+                        break  # unknown error, move to next provider
 
         raise RuntimeError(
             f"All LLM providers exhausted for agent={agent_name}"
