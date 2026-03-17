@@ -140,6 +140,12 @@ export default function Job() {
   const agentsDone = AGENT_KEYS.filter(k => agentStates[k]?.status === 'done').length
   const totalFiles = AGENT_KEYS.reduce((n, k) => n + (agentStates[k]?.files?.length || 0), 0)
   const validationScore = agentStates.validator?.status === 'done' ? (result?.validation_score || '—') : '—'
+  const statusClass = jobStatus === 'complete'
+    ? 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-green-500/20 text-green-400'
+    : jobStatus === 'failed'
+      ? 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-red-500/20 text-red-400'
+      : 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-blue-500/20 text-blue-400'
+  const statusLabel = jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'
 
   const mermaidChart = businessContent?.architecture_mermaid || null
   const readmeContent = businessContent?.readme_content || null
@@ -237,14 +243,7 @@ export default function Job() {
         {/* Timer + status + delete */}
         <div className="flex items-center gap-3 text-sm">
           <span className="text-white/40 tabular-nums font-mono text-xs">{formatTime(elapsed)}</span>
-          <span className={jobStatus === 'complete'
-            ? 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-green-500/20 text-green-400'
-            : jobStatus === 'failed'
-              ? 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-red-500/20 text-red-400'
-              : 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-blue-500/20 text-blue-400'}
-          >
-            {jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'}
-          </span>
+          <span className={statusClass}>{statusLabel}</span>
           <button
             onClick={handleDelete}
             disabled={deleting}
