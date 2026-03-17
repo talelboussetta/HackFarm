@@ -4,11 +4,26 @@ import { useState, useEffect, useCallback } from "react";
 import { OAuthProvider } from "appwrite";
 
 // ── Module-level JWT cache (shared across ALL useAuth() instances) ──
-// Prevents simultaneous createJWT() calls from hitting Appwrite rate limits.
 let _cachedJWT = null;
 let _jwtCreatedAt = 0;
-let _jwtInflight = null; // deduplicate concurrent createJWT() calls
-const JWT_TTL_MS = 10 * 60 * 1000; // reuse for 10 min (JWT expires at 15 min)
+let _jwtInflight = null;
+const JWT_TTL_MS = 10 * 60 * 1000;
+
+// ── Session persistence: use sessionStorage so login is required each new tab/page load ──
+const SESSION_KEY = "hf-tab-auth";
+
+function _hasTabSession() {
+  try { return !!sessionStorage.getItem(SESSION_KEY); } catch { return false; }
+}
+function _setTabSession() {
+  try { sessionStorage.setItem(SESSION_KEY, "1"); } catch {}
+}
+function _clearTabSession() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+  // also clear the JWT cache
+  _cachedJWT = null;
+  _jwtCreatedAt = 0;
+}
 
 /** Read the Appwrite session secret from localStorage (set by SDK as cookieFallback). */
 function _getSessionFromStorage() {
@@ -24,15 +39,12 @@ function _getSessionFromStorage() {
 async function _getOrCreateJWT() {
   const now = Date.now();
   if (_cachedJWT && now - _jwtCreatedAt < JWT_TTL_MS) return _cachedJWT;
-  // Deduplicate: if a createJWT call is already in flight, await it
   if (_jwtInflight) return _jwtInflight;
   _jwtInflight = account
     .createJWT()
     .then((r) => {
-      // r.jwt should be a string; guard against undefined/empty
       const token = r?.jwt;
       if (!token) {
-        // Fall back to session token from localStorage
         const session = _getSessionFromStorage();
         if (!session) throw new Error("createJWT returned empty token and no session in storage");
         _cachedJWT = session;
@@ -45,7 +57,6 @@ async function _getOrCreateJWT() {
     })
     .catch((e) => {
       _jwtInflight = null;
-      // Try localStorage session as fallback before giving up
       const session = _getSessionFromStorage();
       if (session) {
         log.warn("createJWT failed, using session token fallback:", e?.message);
@@ -66,12 +77,30 @@ export function useAuth() {
   const [error, setError] = useState(null);
 
   const fetchUser = useCallback(async () => {
+    // If this is a fresh page load (no sessionStorage marker), force logout so
+    // the user must log in again — avoids stale/expired tokens causing 401s.
+    if (!_hasTabSession()) {
+      // Check if we just came back from a GitHub OAuth flow (marker set before redirect)
+      const oauthPending = localStorage.getItem("hf-oauth-pending");
+      if (oauthPending) {
+        localStorage.removeItem("hf-oauth-pending");
+        _setTabSession();
+        // fall through to account.get() below
+      } else {
+        // Delete any lingering Appwrite session silently
+        try { await account.deleteSession("current"); } catch {}
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+    }
     try {
       const u = await account.get();
       setUser(u);
       setError(null);
     } catch {
       setUser(null);
+      _clearTabSession();
     } finally {
       setLoading(false);
     }
@@ -82,6 +111,8 @@ export function useAuth() {
   }, [fetchUser]);
 
   const loginWithGitHub = () => {
+    // Mark that we're about to do OAuth so fetchUser accepts the session on return
+    localStorage.setItem("hf-oauth-pending", "1");
     account.createOAuth2Session(
       OAuthProvider.Github,
       window.location.origin + "/app",
@@ -94,6 +125,7 @@ export function useAuth() {
     setError(null);
     try {
       await account.createEmailPasswordSession(email, password);
+      _setTabSession();
       await fetchUser();
     } catch (e) {
       setError(e.message || "Login failed");
@@ -106,6 +138,7 @@ export function useAuth() {
     try {
       await account.create("unique()", email, password, name);
       await account.createEmailPasswordSession(email, password);
+      _setTabSession();
       await fetchUser();
     } catch (e) {
       setError(e.message || "Signup failed");
@@ -114,8 +147,7 @@ export function useAuth() {
   };
 
   const logout = async () => {
-    _cachedJWT = null;
-    _jwtCreatedAt = 0;
+    _clearTabSession();
     try {
       await account.deleteSession("current");
     } catch {
@@ -150,3 +182,5 @@ export function useAuth() {
     getJWT,
   };
 }
+
+
