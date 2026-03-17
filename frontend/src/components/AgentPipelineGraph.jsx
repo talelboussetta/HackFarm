@@ -56,7 +56,7 @@ function AgentNode({ data }) {
     <div
       onClick={onClick}
       className={`
-        relative w-[120px] h-[76px] rounded-xl cursor-pointer
+        relative w-[140px] h-[96px] rounded-xl cursor-pointer
         bg-[rgba(255,255,255,0.03)] backdrop-blur-sm
         border ${borderClass}
         transition-all duration-300
@@ -83,7 +83,7 @@ function AgentNode({ data }) {
                 animationData={lottieAnim}
                 loop={status === 'running'}
                 autoplay={true}
-                style={{ width: 24, height: 24 }}
+                style={{ width: 28, height: 28 }}
               />
             </div>
           ) : (
@@ -204,7 +204,7 @@ export default function AgentPipelineGraph({ agentStates, onNodeClick }) {
   const nodeTypes = useMemo(() => ({ agentNode: AgentNode }), [])
 
   return (
-    <div style={{ width: '100%', height: '100%', minHeight: 700 }}>
+    <div style={{ width: '100%', height: '100%', minHeight: 0 }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -213,7 +213,7 @@ export default function AgentPipelineGraph({ agentStates, onNodeClick }) {
         onNodeClick={(_event, node) => onNodeClick?.(node.id)}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.3 }}
+        onInit={(rf) => setTimeout(() => rf.fitView({ padding: 0.06 }), 60)} fitViewOptions={{ padding: 0.06 }} minZoom={0.1} maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
         panOnDrag={false}
         zoomOnScroll={false}

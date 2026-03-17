@@ -39,7 +39,10 @@ function MermaidDiagram({ chart }) {
       const mermaid = mod.default
       mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { darkMode: true } })
       mermaid.render('mermaid-' + Date.now(), chart).then(({ svg }) => {
-        if (!cancelled) setSvg(DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } }))
+        if (!cancelled) {
+          const scaled = svg.replace(/<svg([^>]*)>/, '<svg$1 style="max-width:100%;height:auto">')
+          setSvg(DOMPurify.sanitize(scaled, { USE_PROFILES: { svg: true, svgFilters: true } }))
+        }
       }).catch(() => {})
     })
     return () => { cancelled = true }
