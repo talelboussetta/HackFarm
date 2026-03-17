@@ -44,6 +44,7 @@ async def create_job(
     repo_name: str = Form(...),
     repo_private: bool = Form(False),
     retention_days: int = Form(30),
+    model_preference: str | None = Form(None),
 ):
     """Create a new job and launch the agent pipeline."""
 
@@ -147,7 +148,8 @@ async def create_job(
     # Launch pipeline in background
     asyncio.create_task(
         run_pipeline_task(job["$id"], user["id"], raw_text, input_type,
-                          repo_name, repo_private, retention_days)
+                          repo_name, repo_private, retention_days,
+                          model_preference=model_preference)
     )
 
     return {"job_id": job["$id"], "status": "running"}
@@ -448,13 +450,14 @@ PIPELINE_TIMEOUT_SECONDS = 600  # 10 minutes max per pipeline run
 
 
 async def run_pipeline_task(job_id, user_id, raw_text, input_type,
-                             repo_name, repo_private, retention_days):
+                             repo_name, repo_private, retention_days,
+                             model_preference=None):
   async with GlobalSemaphore():
     try:
       providers = get_user_llm_providers(user_id)
       if not providers:
           raise ValueError("No valid LLM API keys found. Add keys in Settings and try again.")
-      llm = LLMRouter(providers)
+      llm = LLMRouter(providers, preferred_provider=model_preference)
       # Build initial state
       state = normalize_to_initial_state(raw_text, input_type, job_id, user_id)
       state["llm"] = llm

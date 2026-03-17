@@ -136,6 +136,7 @@ export default function Home() {
   const [localError, setLocalError] = useState(null)
   const [fieldErrors, setFieldErrors] = useState({})
   const [stats, setStats] = useState(null)
+  const [modelPref, setModelPref] = useState('')
 
   // Fetch user stats for dashboard
   useEffect(() => {
@@ -191,6 +192,7 @@ export default function Home() {
         repoName: repoName.trim(),
         repoPrivate,
         retentionDays,
+        modelPreference: modelPref || null,
       })
       toast.success('Project generation started!')
       navigate(`/job/${result.job_id}`)
@@ -440,6 +442,21 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-white/60">AI Model</span>
+                <select
+                  value={modelPref}
+                  onChange={e => setModelPref(e.target.value)}
+                  className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 focus:border-blue-400/50 outline-none cursor-pointer appearance-none"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', paddingRight: '24px' }}
+                >
+                  <option value="">Auto (recommended)</option>
+                  <option value="gemini">Gemini 2.0 Flash</option>
+                  <option value="groq">Llama 3.3 70B (Groq)</option>
+                  <option value="openrouter">Llama 3.3 70B (OpenRouter)</option>
+                </select>
               </div>
             </div>
 

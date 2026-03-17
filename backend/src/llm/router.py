@@ -51,10 +51,11 @@ AGENT_PROVIDER_HINTS = {
 
 
 class LLMRouter:
-    def __init__(self, providers: list[dict]):
+    def __init__(self, providers: list[dict], preferred_provider: str | None = None):
         """
         providers: [{"provider": "gemini", "decrypted_key": "..."},
                     {"provider": "groq",   "decrypted_key": "..."}]
+        preferred_provider: if set, this provider will be tried first for ALL agents.
         Builds one AsyncOpenAI client per provider supplied.
         Also adds groq_fast automatically if groq key present.
         """
@@ -65,6 +66,7 @@ class LLMRouter:
         self._total_input_tokens = 0
         self._total_output_tokens = 0
         self._call_count = 0
+        self._preferred_provider = preferred_provider
 
         for p in providers:
             name = p["provider"]
@@ -99,15 +101,18 @@ class LLMRouter:
     def _get_ordered_clients(self, agent_name: str | None) -> list[tuple]:
         """
         Return clients in the preferred order for this agent.
-        Uses AGENT_PROVIDER_HINTS if agent_name is given,
-        otherwise falls back to priority order.
+        If a preferred_provider is set, it takes top priority.
+        Otherwise uses AGENT_PROVIDER_HINTS, then falls back to priority order.
         """
         hints = AGENT_PROVIDER_HINTS.get(agent_name, [])
 
         ordered = []
-        # First: add hinted providers in hint order
+        # Top priority: user-selected preferred provider
+        if self._preferred_provider and self._preferred_provider in self._clients:
+            ordered.append((self._preferred_provider, self._clients[self._preferred_provider]))
+        # Second: add hinted providers in hint order
         for hint in hints:
-            if hint in self._clients:
+            if hint in self._clients and hint not in [o[0] for o in ordered]:
                 ordered.append((hint, self._clients[hint]))
         # Then: add remaining providers sorted by priority
         for name, info in sorted(
