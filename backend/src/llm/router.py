@@ -6,6 +6,7 @@ providers to avoid rate limit stacking.
 """
 
 import asyncio
+import json
 import logging
 import re
 from openai import AsyncOpenAI
@@ -173,6 +174,46 @@ class LLMRouter:
                     f"[LLM] agent={agent_name or '?'} "
                     f"provider={name} in={input_tokens} out={output_tokens}"
                 )
+
+                # Validate JSON responses — retry once on parse failure
+                if response_format == "json":
+                    try:
+                        json.loads(result)
+                    except (json.JSONDecodeError, ValueError):
+                        logger.warning(
+                            f"[LLM] {name} returned invalid JSON for "
+                            f"agent={agent_name}, retrying..."
+                        )
+                        # One retry with stronger instruction
+                        try:
+                            retry_response = await asyncio.wait_for(
+                                client.chat.completions.create(
+                                    model=model,
+                                    messages=[
+                                        {"role": "user", "content": prompt},
+                                        {"role": "assistant", "content": result},
+                                        {"role": "user", "content": "That was not valid JSON. Return ONLY a valid JSON object, nothing else."},
+                                    ],
+                                    temperature=0.1,
+                                ),
+                                timeout=45.0,
+                            )
+                            retry_content = retry_response.choices[0].message.content
+                            if retry_content:
+                                retry_result = retry_content.strip()
+                                if retry_result.startswith("```"):
+                                    retry_result = re.sub(r'^```\w*\s*\n?', '', retry_result)
+                                    retry_result = re.sub(r'\n?```\s*$', '', retry_result)
+                                    retry_result = retry_result.strip()
+                                json.loads(retry_result)  # validate
+                                result = retry_result
+                                r_usage = getattr(retry_response, "usage", None)
+                                self._total_input_tokens += getattr(r_usage, "prompt_tokens", 0) or 0
+                                self._total_output_tokens += getattr(r_usage, "completion_tokens", 0) or 0
+                                self._call_count += 1
+                        except Exception:
+                            pass  # let the agent handle the invalid JSON
+
                 return result
 
             except asyncio.TimeoutError:
