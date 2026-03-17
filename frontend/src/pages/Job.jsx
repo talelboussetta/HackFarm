@@ -145,7 +145,6 @@ export default function Job() {
   const readmeContent = businessContent?.readme_content || null
   const pitchSlides = businessContent?.pitch_slides || []
   const githubUrl = result?.github_url || null
-  const zipFileId = result?.zip_file_id || null
   const repoName = result?.repo_name || id
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -238,9 +237,12 @@ export default function Job() {
         {/* Timer + status + delete */}
         <div className="flex items-center gap-3 text-sm">
           <span className="text-white/40 tabular-nums font-mono text-xs">{formatTime(elapsed)}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
-            jobStatus === 'complete' ? 'bg-green-500/20 text-green-400' : jobStatus === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'
-          }`}>
+          <span className={jobStatus === 'complete'
+            ? 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-green-500/20 text-green-400'
+            : jobStatus === 'failed'
+              ? 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-red-500/20 text-red-400'
+              : 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-blue-500/20 text-blue-400'}
+          >
             {jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'}
           </span>
           <button
@@ -358,11 +360,6 @@ export default function Job() {
                   className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-lg font-medium text-sm hover:bg-white/90 transition-colors">
                   <Github size={16} /> Open on GitHub
                 </a>
-              )}
-              {zipFileId && (
-                <Button onClick={handleDownload} variant="secondary" className="gap-2">
-                  <Download size={16} /> Download ZIP
-                </Button>
               )}
               <button onClick={handleCopyUrl}
                 className="p-2.5 rounded-lg bg-white/10 text-white/60 hover:text-white transition-colors" title="Copy link">
