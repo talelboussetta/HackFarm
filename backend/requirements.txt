@@ -15,10 +15,6 @@ httpx==0.28.1
 langgraph==0.2.60
 openai==1.58.1
 
-# Vector store
-chromadb==0.5.23
-sentence-transformers==3.3.1
-
 # Document parsing
 pymupdf==1.25.1
 python-docx==1.1.2
