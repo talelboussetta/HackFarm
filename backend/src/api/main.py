@@ -50,6 +50,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.error(f"Appwrite connection failed: {e}")
 
+    # Recover stuck jobs from a previous crash (mark running → failed)
+    try:
+        from appwrite.query import Query
+        stuck = databases.list_documents(
+            settings.APPWRITE_DATABASE_ID, "jobs",
+            [Query.equal("status", "running"), Query.limit(50)],
+        )
+        for job in stuck["documents"]:
+            databases.update_document(
+                settings.APPWRITE_DATABASE_ID, "jobs", job["$id"],
+                {"status": "failed", "errorMessage": "Server restarted — job interrupted"},
+            )
+            log.warning(f"Recovered stuck job {job['$id']}")
+    except Exception as e:
+        log.warning(f"Stuck job recovery skipped: {e}")
+
     poller_task = asyncio.create_task(start_queue_poller())
     yield
     poller_task.cancel()

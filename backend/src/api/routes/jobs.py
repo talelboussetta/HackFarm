@@ -264,6 +264,9 @@ async def delete_job(
 
 # ── Background task run_pipeline_task ───
 
+PIPELINE_TIMEOUT_SECONDS = 600  # 10 minutes max per pipeline run
+
+
 async def run_pipeline_task(job_id, user_id, raw_text, input_type,
                              repo_name, repo_private, retention_days):
   async with GlobalSemaphore():
@@ -278,8 +281,16 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
       state["repo_name"] = repo_name  # pass through for github_agent
       state["repo_private"] = repo_private
 
-      # Run the pipeline
-      result = await pipeline.ainvoke(state)
+      # Run the pipeline with a timeout
+      try:
+          result = await asyncio.wait_for(
+              pipeline.ainvoke(state),
+              timeout=PIPELINE_TIMEOUT_SECONDS,
+          )
+      except asyncio.TimeoutError:
+          raise TimeoutError(
+              f"Pipeline timed out after {PIPELINE_TIMEOUT_SECONDS // 60} minutes"
+          )
 
       final_status = "failed" if result.get("errors") else "completed"
       error_msg = "; ".join(result.get("errors", [])[:3]) if result.get("errors") else None

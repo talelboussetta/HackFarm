@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight, Trash2, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
+import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight, Trash2, XCircle, RotateCcw } from 'lucide-react'
 import { useJobStream } from '../hooks/useJobStream'
 import { useAuth } from '../hooks/useAuth'
 import { api } from '../lib/api'
@@ -162,8 +163,8 @@ export default function Job() {
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
-  const handleCopyUrl = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000) }
-  const handleDownload = () => { window.open(`/api/downloads/${id}`, '_blank') }
+  const handleCopyUrl = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); toast.success('URL copied to clipboard'); setTimeout(() => setCopied(false), 2000) }
+  const handleDownload = () => { window.open(`/api/downloads/${id}`, '_blank'); toast.success('Download started') }
 
   const handleDelete = async () => {
     const label = jobStatus === 'running' || jobStatus === 'queued' ? 'Cancel this running job' : 'Delete this project'
@@ -172,9 +173,11 @@ export default function Job() {
     try {
       const jwt = await getJWT()
       await api(`/api/jobs/${id}`, { method: 'DELETE' }, jwt)
+      toast.success(jobStatus === 'running' ? 'Job cancelled' : 'Project deleted')
       navigate('/history')
     } catch (e) {
       log.error('Delete failed:', e)
+      toast.error('Failed to delete project')
       setDeleting(false)
     }
   }
@@ -204,7 +207,12 @@ export default function Job() {
               ))}
             </div>
           )}
-          <Button onClick={() => navigate('/')} variant="secondary">Try Again</Button>
+          <div className="flex gap-3">
+            <Button onClick={() => navigate('/')} variant="primary" className="gap-2">
+              <RotateCcw size={14} /> Retry with new settings
+            </Button>
+            <Button onClick={() => navigate('/history')} variant="secondary">View History</Button>
+          </div>
         </div>
       </div>
     )

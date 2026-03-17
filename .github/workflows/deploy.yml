@@ -6,8 +6,34 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run backend tests
+        run: python -m pytest test_backend_routes.py -v --tb=short
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate frontend build
+        working-directory: frontend
+        run: npm ci && npm run build
+
   backend:
     name: Deploy Backend to Heroku
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +60,7 @@ jobs:
 
   frontend:
     name: Deploy Frontend
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +70,7 @@ jobs:
       - name: Install & Build
         working-directory: frontend
         run: |
-          npm install
+          npm ci
           npm run build
       - name: Deploy to Appwrite Sites
         working-directory: frontend

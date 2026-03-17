@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 import { Upload, MessageSquare, Zap, X, Github, Lock, Globe, AlertTriangle, Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useJobSubmit } from '../hooks/useJobSubmit'
@@ -52,9 +53,11 @@ export default function Home() {
         repoPrivate,
         retentionDays,
       })
+      toast.success('Project generation started!')
       navigate(`/job/${result.job_id}`)
     } catch (err) {
       setLocalError(err.message)
+      toast.error(err.message || 'Failed to create project')
     }
   }
 

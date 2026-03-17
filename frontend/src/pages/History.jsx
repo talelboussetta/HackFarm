@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   History as HistoryIcon,
   ExternalLink,
@@ -68,8 +69,10 @@ export default function History() {
       if (!jwt) { navigate('/landing'); return }
       await api(`/api/jobs/${jobId}`, { method: 'DELETE' }, jwt)
       setJobs(jobs.filter(j => (j.id || j.$id) !== jobId))
+      toast.success('Project deleted')
     } catch (e) {
       log.error('Failed to delete job:', e)
+      toast.error('Failed to delete project')
     } finally {
       setDeleting(null)
     }

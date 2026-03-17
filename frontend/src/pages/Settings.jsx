@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 import { 
   Settings as SettingsIcon, 
   Key, 
@@ -71,9 +72,11 @@ export default function Settings() {
       setKeys(Array.isArray(data) ? data : [])
       setAddingProvider(null)
       setNewKey('')
+      toast.success(`${provider} API key saved`)
     } catch (e) {
       log.error('Failed to save key:', e)
       setSaveError(e.message || 'Failed to save key')
+      toast.error('Failed to save API key')
     } finally {
       setSavingProvider(null)
     }
@@ -85,8 +88,10 @@ export default function Settings() {
       await api(`/api/settings/keys/${provider}`, { method: 'DELETE' }, jwt)
       setKeys(keys.filter(k => k.provider !== provider))
       setTestResults(prev => { const n = {...prev}; delete n[provider]; return n })
+      toast.success(`${provider} key removed`)
     } catch (e) {
       log.error('Failed to delete key:', e)
+      toast.error('Failed to remove API key')
     }
   }
 
@@ -96,9 +101,13 @@ export default function Settings() {
     try {
       const jwt = await getJWT()
       const res = await api(`/api/settings/keys/${provider}/test`, { method: 'POST' }, jwt)
-      setTestResults(prev => ({ ...prev, [provider]: res.valid !== false }))
+      const valid = res.valid !== false
+      setTestResults(prev => ({ ...prev, [provider]: valid }))
+      if (valid) toast.success(`${provider} key is valid`)
+      else toast.error(`${provider} key test failed`)
     } catch {
       setTestResults(prev => ({ ...prev, [provider]: false }))
+      toast.error(`${provider} key test failed`)
     } finally {
       setTestingProvider(null)
     }
