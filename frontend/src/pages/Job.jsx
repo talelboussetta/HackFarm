@@ -238,6 +238,7 @@ export default function Job() {
         {/* Timer + status + delete */}
         <div className="flex items-center gap-3 text-sm">
           <span className="text-white/40 tabular-nums font-mono text-xs">{formatTime(elapsed)}</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
             jobStatus === 'complete' ? 'bg-green-500/20 text-green-400' : jobStatus === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'
           }`}>
             {jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'}
