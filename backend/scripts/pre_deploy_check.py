@@ -150,9 +150,10 @@ def check_python_version():
 def check_packages():
     required = [
         "fastapi", "uvicorn", "sse_starlette", "pyjwt", "cryptography",
-        "httpx", "langgraph", "openai", "chromadb", "sentence_transformers",
+        "httpx", "langgraph", "openai",
         "pymupdf", "docx", "pydantic_settings", "dotenv", "bleach",
-        "appwrite", "multipart",
+        "slowapi", "sentry_sdk", "appwrite", "multipart",
+        "ruff", "pytest", "pytest_asyncio",
     ]
     missing = []
     for pkg in required:
@@ -160,7 +161,7 @@ def check_packages():
             importlib.import_module(pkg)
         except ImportError:
             # Try alternate names
-            alt = {"pymupdf": "fitz", "pyjwt": "jwt", "dotenv": "dotenv"}
+            alt = {"pymupdf": "fitz", "pyjwt": "jwt", "dotenv": "dotenv", "docx": "docx"}
             alt_name = alt.get(pkg)
             if alt_name:
                 try:

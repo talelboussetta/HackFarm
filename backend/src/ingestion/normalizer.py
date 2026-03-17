@@ -50,4 +50,5 @@ def normalize_to_initial_state(
         "github_url": None,
         "repo_name": "",
         "repo_private": False,
+        "refinement_feedback": None,
     }
