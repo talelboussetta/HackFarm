@@ -37,7 +37,11 @@ async def get_current_user(request: Request) -> dict:
         return {"id": user["$id"], "name": user["name"],
                 "email": user.get("email", "")}
     except Exception as exc:
-        log.warning("get_current_user: Appwrite rejected token — %s [%s %s]",
-                    exc, request.method, request.url.path)
+        token_preview = session_token[:20] + "..." if len(session_token) > 20 else session_token
+        token_type = "JWT" if session_token.startswith("eyJ") else "session"
+        log.warning(
+            "get_current_user: Appwrite rejected %s token (preview=%s) — %s [%s %s]",
+            token_type, token_preview, exc, request.method, request.url.path
+        )
         raise HTTPException(status_code=401, detail="Not authenticated")
 

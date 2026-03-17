@@ -77,18 +77,17 @@ export function useAuth() {
   const [error, setError] = useState(null);
 
   const fetchUser = useCallback(async () => {
-    // If this is a fresh page load (no sessionStorage marker), force logout so
-    // the user must log in again — avoids stale/expired tokens causing 401s.
+    // If this is a fresh page load (no sessionStorage marker), don't auto-login.
+    // The user must explicitly click login — prevents stale sessions causing 401s.
     if (!_hasTabSession()) {
-      // Check if we just came back from a GitHub OAuth flow (marker set before redirect)
+      // Check if we just came back from a GitHub OAuth flow
       const oauthPending = localStorage.getItem("hf-oauth-pending");
       if (oauthPending) {
         localStorage.removeItem("hf-oauth-pending");
         _setTabSession();
         // fall through to account.get() below
       } else {
-        // Delete any lingering Appwrite session silently
-        try { await account.deleteSession("current"); } catch {}
+        // No tab session — require explicit login, don't touch the Appwrite session
         setUser(null);
         setLoading(false);
         return;
@@ -111,6 +110,8 @@ export function useAuth() {
   }, [fetchUser]);
 
   const loginWithGitHub = () => {
+    // Clear any cached JWT so we always get a fresh one after login
+    _clearTabSession();
     // Mark that we're about to do OAuth so fetchUser accepts the session on return
     localStorage.setItem("hf-oauth-pending", "1");
     account.createOAuth2Session(
@@ -123,6 +124,8 @@ export function useAuth() {
 
   const loginWithEmail = async (email, password) => {
     setError(null);
+    // Delete any existing session so we always start with a fresh one
+    try { await account.deleteSession("current"); } catch {}
     try {
       await account.createEmailPasswordSession(email, password);
       _setTabSession();
@@ -135,6 +138,7 @@ export function useAuth() {
 
   const signupWithEmail = async (email, password, name) => {
     setError(null);
+    try { await account.deleteSession("current"); } catch {}
     try {
       await account.create("unique()", email, password, name);
       await account.createEmailPasswordSession(email, password);
@@ -182,5 +186,3 @@ export function useAuth() {
     getJWT,
   };
 }
-
-
