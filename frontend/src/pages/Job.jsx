@@ -269,8 +269,18 @@ export default function Job() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left column — Pipeline (42%) */}
         <div className="w-[42%] border-r border-white/10 flex flex-col overflow-hidden">
-          <div className="px-4 pt-3 pb-1">
-            <h2 className="text-xs font-heading text-white/30 uppercase tracking-widest">Pipeline</h2>
+          <div className="px-4 pt-3 pb-2">
+            <h2 className="text-xs font-heading text-white/30 uppercase tracking-widest mb-1.5">Pipeline</h2>
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="group cursor-default"
+            >
+              <p className="text-[13px] font-medium text-white/60 group-hover:text-white/80 transition-colors">
+                👆 <span className="inline-block group-hover:scale-105 transition-transform">Click any agent</span> to see live progress
+              </p>
+            </motion.div>
           </div>
           <div className="flex-1 overflow-hidden">
             <AgentPipelineGraph agentStates={agentStates} onNodeClick={handleNodeClick} />
