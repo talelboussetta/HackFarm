@@ -147,7 +147,11 @@ export default function Job() {
       : 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-blue-500/20 text-blue-400'
   const statusLabel = jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'
 
-  const mermaidChart = businessContent?.architecture_mermaid || null
+  const mermaidChart = businessContent?.architecture_mermaid || (
+    (jobStatus === 'complete' || jobStatus === 'completed')
+      ? 'graph TD\n  A[Architecture summary unavailable] --> B[Open agent details]\n  A --> C[Run Refine with AI to regenerate architecture]'
+      : null
+  )
   const readmeContent = businessContent?.readme_content || null
   const pitchSlides = businessContent?.pitch_slides || []
   const githubUrl = result?.github_url || null

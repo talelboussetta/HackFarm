@@ -197,8 +197,6 @@ async def _github_agent_impl(state: ProjectState) -> dict:
             "githubUrl": github_url,
             "completedAt": datetime.now(timezone.utc).isoformat(),
         }
-        if zip_file_id:
-            update_data["zipFileId"] = zip_file_id
         databases.update_document(DB, "jobs", job_id, update_data)
     except Exception as e:
         log.warning(f"Job update failed: {e}")
@@ -219,6 +217,9 @@ async def _github_agent_impl(state: ProjectState) -> dict:
         "zip_file_id": zip_file_id or "",
         "file_count": len(all_files),
         "validation_score": state.get("validation_score", 0),
+        "architecture_mermaid": state.get("architecture_mermaid", ""),
+        "readme_content": state.get("readme_content", ""),
+        "pitch_slides": state.get("pitch_slides", []),
     })
 
     return {

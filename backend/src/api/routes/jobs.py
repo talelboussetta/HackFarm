@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
-import asyncio, io, json, logging, re, zipfile
+import asyncio, base64, io, json, logging, re, zipfile
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import PlainTextResponse
 from appwrite.query import Query
 from appwrite.id import ID
 from src.api.dependencies import get_current_user
-from src.appwrite_client import databases, storage
+from src.appwrite_client import databases, storage, users_service
 from src.core.config import settings
 from src.core.events import publish
 from src.core.queue_manager import GlobalSemaphore, can_run_job
@@ -31,6 +32,7 @@ DB = settings.APPWRITE_DATABASE_ID
 log = logging.getLogger(__name__)
 
 VALID_REPO_NAME = re.compile(r"^[a-zA-Z0-9_.-]+$")
+GITHUB_REPO_RE = re.compile(r"github\.com/([^/]+)/([^/]+)")
 
 # ── POST /api/jobs ────────────────────────────────────────────
 
@@ -184,7 +186,6 @@ async def list_jobs(
                 "repo_name": j["repoName"],
                 "repo_private": j["repoPrivate"],
                 "github_url": j.get("githubUrl"),
-                "zip_path": j.get("zipFileId"),
                 "created_at": j["$createdAt"],
                 "completed_at": j.get("completedAt"),
                 "error_message": j.get("errorMessage"),
@@ -226,7 +227,6 @@ async def get_job(
         "repo_name": job["repoName"],
         "repo_private": job["repoPrivate"],
         "github_url": job.get("githubUrl"),
-        "zip_path": job.get("zipFileId"),
         "error_message": job.get("errorMessage"),
         "created_at": job["$createdAt"],
         "completed_at": job.get("completedAt"),
@@ -249,27 +249,24 @@ async def get_job(
 
 def _get_zip_bytes(job: dict) -> bytes:
     """Download the ZIP from Appwrite Storage for a given job."""
-    zip_file_id = job.get("zipFileId")
-    if not zip_file_id:
-        try:
-            recent = databases.list_documents(
-                DB,
-                "job-events",
-                [
-                    Query.equal("jobId", job["$id"]),
-                    Query.equal("eventType", "job_complete"),
-                    Query.order_desc("$createdAt"),
-                    Query.limit(1),
-                ],
-            )
-            docs = recent.get("documents", [])
-            if docs:
-                payload = json.loads(docs[0].get("payload") or "{}")
-                zip_file_id = payload.get("zip_file_id")
-                if zip_file_id:
-                    databases.update_document(DB, "jobs", job["$id"], {"zipFileId": zip_file_id})
-        except Exception:
-            zip_file_id = None
+    zip_file_id = None
+    try:
+        recent = databases.list_documents(
+            DB,
+            "job-events",
+            [
+                Query.equal("jobId", job["$id"]),
+                Query.equal("eventType", "job_complete"),
+                Query.order_desc("$createdAt"),
+                Query.limit(1),
+            ],
+        )
+        docs = recent.get("documents", [])
+        if docs:
+            payload = json.loads(docs[0].get("payload") or "{}")
+            zip_file_id = payload.get("zip_file_id")
+    except Exception:
+        zip_file_id = None
     if not zip_file_id:
         raise HTTPException(404, "ZIP not available — job may still be running")
     try:
@@ -279,6 +276,92 @@ def _get_zip_bytes(job: dict) -> bytes:
         )
     except Exception:
         raise HTTPException(500, "Failed to retrieve ZIP file")
+
+
+def _parse_github_repo(job: dict) -> tuple[str, str]:
+    github_url = (job.get("githubUrl") or "").strip()
+    m = GITHUB_REPO_RE.search(github_url)
+    if not m:
+        raise HTTPException(404, "Repository URL not available for this job")
+    return m.group(1), m.group(2).removesuffix(".git")
+
+
+def _get_user_github_token(user_id: str) -> str | None:
+    try:
+        identities = users_service.list_identities(queries=[Query.equal("userId", user_id)])
+        github_identity = next(
+            (i for i in identities.get("identities", []) if i.get("provider") == "github"),
+            None,
+        )
+        return (github_identity or {}).get("providerAccessToken") or None
+    except Exception:
+        return None
+
+
+async def _list_github_files(job: dict, user: dict) -> list[dict]:
+    owner, repo = _parse_github_repo(job)
+    token = _get_user_github_token(user["id"])
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for ref in ("main", "master"):
+            resp = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/git/trees/{ref}",
+                params={"recursive": "1"},
+                headers=headers,
+            )
+            if resp.status_code == 404:
+                continue
+            if resp.status_code == 403:
+                raise HTTPException(403, "Cannot access repository files (permission denied)")
+            if not resp.is_success:
+                raise HTTPException(502, f"Failed to load repository tree ({resp.status_code})")
+            tree = resp.json().get("tree", [])
+            return sorted(
+                [
+                    {"path": item["path"], "size": int(item.get("size") or 0)}
+                    for item in tree
+                    if item.get("type") == "blob"
+                ],
+                key=lambda f: f["path"],
+            )
+    raise HTTPException(404, "No repository branch found for file listing")
+
+
+async def _get_github_file_content(job: dict, user: dict, filepath: str) -> str:
+    owner, repo = _parse_github_repo(job)
+    token = _get_user_github_token(user["id"])
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for ref in ("main", "master"):
+            resp = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/contents/{filepath}",
+                params={"ref": ref},
+                headers=headers,
+            )
+            if resp.status_code == 404:
+                continue
+            if resp.status_code == 403:
+                raise HTTPException(403, "Cannot access repository file content")
+            if not resp.is_success:
+                raise HTTPException(502, f"Failed to load repository file ({resp.status_code})")
+            payload = resp.json()
+            if payload.get("encoding") == "base64":
+                raw = payload.get("content", "").replace("\n", "")
+                return base64.b64decode(raw).decode("utf-8", errors="replace")
+            return payload.get("content", "")
+    raise HTTPException(404, f"File not found: {filepath}")
 
 
 @router.get("/{job_id}/files")
@@ -291,17 +374,20 @@ async def list_files(job_id: str, user: dict = Depends(get_current_user)):
     if job["userId"] != user["id"]:
         raise HTTPException(403, "Not your job")
 
-    raw = _get_zip_bytes(job)
-    with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
-        files = []
-        for info in zf.infolist():
-            if info.is_dir():
-                continue
-            files.append({
-                "path": info.filename,
-                "size": info.file_size,
-            })
-    return {"files": sorted(files, key=lambda f: f["path"])}
+    try:
+        raw = _get_zip_bytes(job)
+        with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
+            files = []
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                files.append({
+                    "path": info.filename,
+                    "size": info.file_size,
+                })
+        return {"files": sorted(files, key=lambda f: f["path"])}
+    except HTTPException:
+        return {"files": await _list_github_files(job, user)}
 
 
 @router.get("/{job_id}/files/{filepath:path}")
@@ -318,12 +404,15 @@ async def get_file_content(
     if job["userId"] != user["id"]:
         raise HTTPException(403, "Not your job")
 
-    raw = _get_zip_bytes(job)
-    with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
-        if filepath not in zf.namelist():
-            raise HTTPException(404, f"File not found: {filepath}")
-        content = zf.read(filepath).decode("utf-8", errors="replace")
-    return PlainTextResponse(content)
+    try:
+        raw = _get_zip_bytes(job)
+        with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
+            if filepath not in zf.namelist():
+                raise HTTPException(404, f"File not found: {filepath}")
+            content = zf.read(filepath).decode("utf-8", errors="replace")
+        return PlainTextResponse(content)
+    except HTTPException:
+        return PlainTextResponse(await _get_github_file_content(job, user, filepath))
 
 
 # ── GET /api/jobs/stats ───────────────────────────────────────
@@ -508,7 +597,6 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
       databases.update_document(DB, "jobs", job_id, {
           "status": final_status,
           "githubUrl": result.get("github_url", ""),
-          "zipFileId": result.get("zip_file_id", ""),
           "completedAt": datetime.now(timezone.utc).isoformat(),
           "errorMessage": error_msg,
       })
@@ -549,8 +637,10 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
 
 async def run_refine_task(job_id, user_id, original_prompt, feedback,
                           repo_name, repo_private):
-  """Re-run coding agents with user feedback, skipping analyst + architect."""
+  """Re-run agents with feedback; ensure analysis/architecture context is present."""
   from src.agents.refine_graph import refine_pipeline
+  from src.agents.analyst import analyst
+  from src.agents.architect import architect
 
   async with GlobalSemaphore():
     try:
@@ -576,6 +666,7 @@ async def run_refine_task(job_id, user_id, original_prompt, feedback,
       state["llm"] = llm
       state["repo_name"] = repo_name
       state["repo_private"] = repo_private
+      state["retry_count"] = 0
 
       # Pre-populate analyst + architect outputs from previous run
       # (fetch from agent-runs so the coding agents have context)
@@ -591,6 +682,17 @@ async def run_refine_task(job_id, user_id, original_prompt, feedback,
               })
       except Exception:
           pass
+
+      # Rebuild prerequisite context so coding agents always have api_contracts.
+      analyst_out = await analyst(state)
+      if analyst_out.get("errors"):
+          raise ValueError("; ".join(analyst_out["errors"]))
+      state.update(analyst_out)
+
+      architect_out = await architect(state)
+      if architect_out.get("errors"):
+          raise ValueError("; ".join(architect_out["errors"]))
+      state.update(architect_out)
 
       # Run the refinement pipeline (coding agents → integrator → validator → github)
       try:
