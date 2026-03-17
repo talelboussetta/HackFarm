@@ -4,6 +4,40 @@ from appwrite.services.storage import Storage
 from appwrite.services.users import Users
 from src.core.config import settings
 
+
+def _to_dict(obj):
+    """Convert Appwrite SDK typed objects to dicts for consistent access.
+    Newer SDK versions return typed objects (DocumentList, Document, User)
+    instead of plain dicts. This ensures result["key"] always works.
+    """
+    if isinstance(obj, dict):
+        return obj
+    if hasattr(obj, "__dict__"):
+        d = {}
+        for k, v in obj.__dict__.items():
+            if isinstance(v, list):
+                d[k] = [_to_dict(i) for i in v]
+            else:
+                d[k] = v
+        return d
+    return obj
+
+
+class _DictDatabases:
+    """Thin wrapper around Databases that normalizes responses to dicts."""
+    def __init__(self, db: Databases):
+        self._db = db
+
+    def __getattr__(self, name):
+        attr = getattr(self._db, name)
+        if callable(attr):
+            def wrapper(*a, **kw):
+                result = attr(*a, **kw)
+                return _to_dict(result)
+            return wrapper
+        return attr
+
+
 def _build_client() -> Client:
     c = Client()
     c.set_endpoint(settings.APPWRITE_ENDPOINT)
@@ -13,7 +47,7 @@ def _build_client() -> Client:
 
 # Module-level singletons - used across all backend files
 _client = _build_client()
-databases = Databases(_client)
+databases = _DictDatabases(Databases(_client))
 storage = Storage(_client)
 users_service = Users(_client)
 
