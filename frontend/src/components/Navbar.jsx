@@ -22,7 +22,7 @@ export default function Navbar() {
   }, [])
 
   const navItems = [
-    { name: 'Home', path: '/', icon: Layout },
+    { name: 'Home', path: '/app', icon: Layout },
     { name: 'History', path: '/history', icon: History },
   ]
 

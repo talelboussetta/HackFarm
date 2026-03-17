@@ -196,7 +196,7 @@ export default function Landing() {
         await loginWithEmail(email, password)
         toast.success('Welcome back!')
       }
-      navigate('/')
+      navigate('/app')
     } catch (err) {
       setLocalError(err.message)
       toast.error(err.message || 'Authentication failed')

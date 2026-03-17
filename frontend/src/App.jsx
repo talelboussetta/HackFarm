@@ -34,8 +34,8 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/" element={user ? <HomeWithLayout /> : <Landing />} />
-        <Route path="/landing" element={user ? <Navigate to="/" replace /> : <Landing />} />
+        <Route path="/" element={<Landing />} />
+        <Route path="/landing" element={<Landing />} />
         <Route path="/app" element={user ? <HomeWithLayout /> : <Navigate to="/" replace />} />
         <Route path="/job/:id" element={user ? <JobWithLayout /> : <Navigate to="/" replace />} />
         <Route path="/job/:jobId/agent/:agentKey" element={user ? <AgentStagePage /> : <Navigate to="/" replace />} />
