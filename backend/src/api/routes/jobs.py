@@ -666,6 +666,7 @@ async def run_refine_task(job_id, user_id, original_prompt, feedback,
       state["llm"] = llm
       state["repo_name"] = repo_name
       state["repo_private"] = repo_private
+      state["github_url"] = job.get("githubUrl", "")
       state["retry_count"] = 0
 
       # Pre-populate analyst + architect outputs from previous run
