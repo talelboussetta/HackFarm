@@ -37,7 +37,12 @@ function MermaidDiagram({ chart }) {
     let cancelled = false
     import('mermaid').then(mod => {
       const mermaid = mod.default
-      mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { darkMode: true } })
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: { darkMode: true },
+        flowchart: { htmlLabels: false },
+      })
       mermaid.render('mermaid-' + Date.now(), chart).then(({ svg }) => {
         if (!cancelled) {
           const scaled = svg.replace(/<svg([^>]*)>/, '<svg$1 style="max-width:100%;height:auto">')
