@@ -40,14 +40,20 @@ function MermaidDiagram({ chart }) {
       mermaid.initialize({
         startOnLoad: false,
         theme: 'dark',
-        themeVariables: { darkMode: true },
+        themeVariables: {
+          darkMode: true,
+          primaryTextColor: '#e5e7eb',
+          textColor: '#e5e7eb',
+          lineColor: '#94a3b8',
+          edgeLabelBackground: '#111827',
+        },
         flowchart: { htmlLabels: false },
       })
       mermaid.render('mermaid-' + Date.now(), chart).then(({ svg }) => {
         if (!cancelled) {
           const scaled = svg
             .replace(/<svg([^>]*)>/, '<svg$1 style="max-width:100%;height:auto">')
-            .replace(/class="nodeLabel"/g, 'class="nodeLabel" style="color:#e5e7eb !important;fill:#e5e7eb !important;"')
+            .replace('</svg>', '<style>.nodeLabel,.edgeLabel,.label text{fill:#e5e7eb !important;color:#e5e7eb !important;}</style></svg>')
           setSvg(DOMPurify.sanitize(scaled, { USE_PROFILES: { svg: true, svgFilters: true } }))
         }
       }).catch(() => {})
