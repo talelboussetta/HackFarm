@@ -315,7 +315,7 @@ export default function Landing() {
               display: 'inline-block', padding: '8px 20px', borderRadius: 100,
               background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.2)',
               fontFamily: outfit, fontSize: 14, fontWeight: 400, color: gold, letterSpacing: 0.3,
-            }}>🌾 Now in Beta — Free to use</span>
+            }}>🌾 Open Source — 100% Free</span>
           </motion.div>
 
           {/* h1 */}
@@ -345,14 +345,15 @@ export default function Landing() {
             onMouseEnter={e => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = `0 8px 30px ${lime}33` }}
             onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = 'none' }}
             >Generate a project →</button>
-            <button onClick={() => scrollTo('agent-01')} style={{
+            <a href="https://github.com/talelboussetta/HackFarm" target="_blank" rel="noreferrer" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
               background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.2)',
               borderRadius: 12, padding: '16px 36px', fontSize: 16, fontFamily: outfit, fontWeight: 400, cursor: 'pointer',
-              transition: 'border-color 0.2s',
+              transition: 'border-color 0.2s, background 0.2s', textDecoration: 'none',
             }}
-            onMouseEnter={e => e.target.style.borderColor = 'rgba(255,255,255,0.5)'}
-            onMouseLeave={e => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
-            >Watch it work ↓</button>
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'transparent' }}
+            >⭐ Star on GitHub</a>
           </motion.div>
 
           {/* stats */}
@@ -631,7 +632,7 @@ export default function Landing() {
             FAQ
           </motion.h2>
           {[
-            { q: 'Is it free?', a: 'Yes — HackFarmer is free during beta. You bring your own LLM API keys (Gemini, Groq, or OpenRouter), so you only pay your provider\'s rates.' },
+            { q: 'Is it free?', a: 'Yes — HackFarmer is 100% free. You bring your own LLM API keys (Gemini, Groq, or OpenRouter), so you only pay your provider\'s rates. No hidden fees, no premium tier, no credit card required.' },
             { q: 'What LLM providers are supported?', a: 'We support Google Gemini, Groq, and OpenRouter. You can add multiple keys and we\'ll automatically fallback between them if one fails.' },
             { q: 'Is my code private?', a: 'Absolutely. Your API keys are Fernet-encrypted at rest. Generated code is pushed to your own GitHub account (public or private, your choice). We never store your source code on our servers.' },
             { q: 'What kinds of projects can it generate?', a: 'Full-stack web apps with a React + Vite frontend and FastAPI backend. Think: dashboards, SaaS apps, hackathon projects, MVPs, internal tools — anything describable in a spec.' },
@@ -681,9 +682,9 @@ export default function Landing() {
             fontFamily: outfit, fontWeight: 400, fontSize: 14, color: 'rgba(255,255,255,0.3)',
             marginTop: 32, display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap',
           }}>
-            <span>✓ Free to use</span>
+            <span>✓ 100% free</span>
             <span>✓ No credit card</span>
-            <span>✓ GitHub OAuth only</span>
+            <span>✓ Open source</span>
           </motion.p>
         </div>
 
