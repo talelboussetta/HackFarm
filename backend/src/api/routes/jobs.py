@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
-import asyncio, io, json, logging, re, zipfile
+import asyncio, base64, io, json, logging, re, zipfile
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import PlainTextResponse
 from appwrite.query import Query
 from appwrite.id import ID
 from src.api.dependencies import get_current_user
-from src.appwrite_client import databases, storage
+from src.appwrite_client import databases, storage, users_service
 from src.core.config import settings
 from src.core.events import publish
 from src.core.queue_manager import GlobalSemaphore, can_run_job
@@ -31,6 +32,7 @@ DB = settings.APPWRITE_DATABASE_ID
 log = logging.getLogger(__name__)
 
 VALID_REPO_NAME = re.compile(r"^[a-zA-Z0-9_.-]+$")
+GITHUB_REPO_RE = re.compile(r"github\.com/([^/]+)/([^/]+)")
 
 # ── POST /api/jobs ────────────────────────────────────────────
 
@@ -276,6 +278,92 @@ def _get_zip_bytes(job: dict) -> bytes:
         raise HTTPException(500, "Failed to retrieve ZIP file")
 
 
+def _parse_github_repo(job: dict) -> tuple[str, str]:
+    github_url = (job.get("githubUrl") or "").strip()
+    m = GITHUB_REPO_RE.search(github_url)
+    if not m:
+        raise HTTPException(404, "Repository URL not available for this job")
+    return m.group(1), m.group(2).removesuffix(".git")
+
+
+def _get_user_github_token(user_id: str) -> str | None:
+    try:
+        identities = users_service.list_identities(queries=[Query.equal("userId", user_id)])
+        github_identity = next(
+            (i for i in identities.get("identities", []) if i.get("provider") == "github"),
+            None,
+        )
+        return (github_identity or {}).get("providerAccessToken") or None
+    except Exception:
+        return None
+
+
+async def _list_github_files(job: dict, user: dict) -> list[dict]:
+    owner, repo = _parse_github_repo(job)
+    token = _get_user_github_token(user["id"])
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for ref in ("main", "master"):
+            resp = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/git/trees/{ref}",
+                params={"recursive": "1"},
+                headers=headers,
+            )
+            if resp.status_code == 404:
+                continue
+            if resp.status_code == 403:
+                raise HTTPException(403, "Cannot access repository files (permission denied)")
+            if not resp.is_success:
+                raise HTTPException(502, f"Failed to load repository tree ({resp.status_code})")
+            tree = resp.json().get("tree", [])
+            return sorted(
+                [
+                    {"path": item["path"], "size": int(item.get("size") or 0)}
+                    for item in tree
+                    if item.get("type") == "blob"
+                ],
+                key=lambda f: f["path"],
+            )
+    raise HTTPException(404, "No repository branch found for file listing")
+
+
+async def _get_github_file_content(job: dict, user: dict, filepath: str) -> str:
+    owner, repo = _parse_github_repo(job)
+    token = _get_user_github_token(user["id"])
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for ref in ("main", "master"):
+            resp = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/contents/{filepath}",
+                params={"ref": ref},
+                headers=headers,
+            )
+            if resp.status_code == 404:
+                continue
+            if resp.status_code == 403:
+                raise HTTPException(403, "Cannot access repository file content")
+            if not resp.is_success:
+                raise HTTPException(502, f"Failed to load repository file ({resp.status_code})")
+            payload = resp.json()
+            if payload.get("encoding") == "base64":
+                raw = payload.get("content", "").replace("\n", "")
+                return base64.b64decode(raw).decode("utf-8", errors="replace")
+            return payload.get("content", "")
+    raise HTTPException(404, f"File not found: {filepath}")
+
+
 @router.get("/{job_id}/files")
 async def list_files(job_id: str, user: dict = Depends(get_current_user)):
     """Return the list of files inside the generated ZIP with metadata."""
@@ -286,17 +374,20 @@ async def list_files(job_id: str, user: dict = Depends(get_current_user)):
     if job["userId"] != user["id"]:
         raise HTTPException(403, "Not your job")
 
-    raw = _get_zip_bytes(job)
-    with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
-        files = []
-        for info in zf.infolist():
-            if info.is_dir():
-                continue
-            files.append({
-                "path": info.filename,
-                "size": info.file_size,
-            })
-    return {"files": sorted(files, key=lambda f: f["path"])}
+    try:
+        raw = _get_zip_bytes(job)
+        with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
+            files = []
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                files.append({
+                    "path": info.filename,
+                    "size": info.file_size,
+                })
+        return {"files": sorted(files, key=lambda f: f["path"])}
+    except HTTPException:
+        return {"files": await _list_github_files(job, user)}
 
 
 @router.get("/{job_id}/files/{filepath:path}")
@@ -313,12 +404,15 @@ async def get_file_content(
     if job["userId"] != user["id"]:
         raise HTTPException(403, "Not your job")
 
-    raw = _get_zip_bytes(job)
-    with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
-        if filepath not in zf.namelist():
-            raise HTTPException(404, f"File not found: {filepath}")
-        content = zf.read(filepath).decode("utf-8", errors="replace")
-    return PlainTextResponse(content)
+    try:
+        raw = _get_zip_bytes(job)
+        with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
+            if filepath not in zf.namelist():
+                raise HTTPException(404, f"File not found: {filepath}")
+            content = zf.read(filepath).decode("utf-8", errors="replace")
+        return PlainTextResponse(content)
+    except HTTPException:
+        return PlainTextResponse(await _get_github_file_content(job, user, filepath))
 
 
 # ── GET /api/jobs/stats ───────────────────────────────────────
