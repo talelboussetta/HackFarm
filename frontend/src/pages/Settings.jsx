@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
+import EmptyState from '../components/EmptyState'
 import { 
   Settings as SettingsIcon, 
   Key, 
@@ -71,9 +73,11 @@ export default function Settings() {
       setKeys(Array.isArray(data) ? data : [])
       setAddingProvider(null)
       setNewKey('')
+      toast.success(`${provider} API key saved`)
     } catch (e) {
       log.error('Failed to save key:', e)
       setSaveError(e.message || 'Failed to save key')
+      toast.error('Failed to save API key')
     } finally {
       setSavingProvider(null)
     }
@@ -85,8 +89,10 @@ export default function Settings() {
       await api(`/api/settings/keys/${provider}`, { method: 'DELETE' }, jwt)
       setKeys(keys.filter(k => k.provider !== provider))
       setTestResults(prev => { const n = {...prev}; delete n[provider]; return n })
+      toast.success(`${provider} key removed`)
     } catch (e) {
       log.error('Failed to delete key:', e)
+      toast.error('Failed to remove API key')
     }
   }
 
@@ -96,9 +102,13 @@ export default function Settings() {
     try {
       const jwt = await getJWT()
       const res = await api(`/api/settings/keys/${provider}/test`, { method: 'POST' }, jwt)
-      setTestResults(prev => ({ ...prev, [provider]: res.valid !== false }))
+      const valid = res.valid !== false
+      setTestResults(prev => ({ ...prev, [provider]: valid }))
+      if (valid) toast.success(`${provider} key is valid`)
+      else toast.error(`${provider} key test failed`)
     } catch {
       setTestResults(prev => ({ ...prev, [provider]: false }))
+      toast.error(`${provider} key test failed`)
     } finally {
       setTestingProvider(null)
     }
@@ -169,15 +179,12 @@ export default function Settings() {
 
         <AnimatePresence>
           {noKeysConfigured && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex items-center gap-3 p-4 rounded-xl bg-amber-400/10 border border-amber-400/20 text-amber-400"
-            >
-              <AlertTriangle size={18} />
-              <span className="text-sm font-medium">Add at least one API key to generate projects</span>
-            </motion.div>
+            <EmptyState
+              icon="keys"
+              title="No API keys configured"
+              description="Add at least one LLM provider key to start generating projects. We support Gemini, Groq, and OpenRouter."
+              className="py-8 bg-white/[0.02] rounded-xl border border-dashed border-white/10"
+            />
           )}
         </AnimatePresence>
 

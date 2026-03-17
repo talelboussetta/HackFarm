@@ -7,7 +7,14 @@ export function useJobSubmit() {
   const { getJWT } = useAuth();
 
   const submit = useCallback(
-    async ({ file, prompt, repoName, repoPrivate, retentionDays }) => {
+    async ({
+      file,
+      prompt,
+      repoName,
+      repoPrivate,
+      retentionDays,
+      modelPreference,
+    }) => {
       setLoading(true);
       setError(null);
       try {
@@ -20,6 +27,8 @@ export function useJobSubmit() {
         formData.append("repo_name", repoName);
         formData.append("repo_private", String(repoPrivate));
         formData.append("retention_days", String(retentionDays));
+        if (modelPreference)
+          formData.append("model_preference", modelPreference);
 
         const headers = { "X-Appwrite-Session": jwt };
 

@@ -59,6 +59,24 @@ class GitHubClient:
                     "Cannot create repo — GitHub token lacks 'repo' scope. "
                     "Re-authenticate with GitHub to grant repository access."
                 )
+            if resp.status_code == 422:
+                detail = ""
+                try:
+                    payload = resp.json()
+                    errors = payload.get("errors") or []
+                    messages = [e.get("message", "") for e in errors if isinstance(e, dict)]
+                    detail = " ".join(m for m in messages if m).lower()
+                except Exception:
+                    detail = ""
+                if "already exists" in detail:
+                    raise ValueError(
+                        f"Repository '{name}' already exists on your GitHub account. "
+                        "Choose a different repo name and retry."
+                    )
+                raise ValueError(
+                    "GitHub rejected repository creation (422). "
+                    "Check repository name/visibility and try again."
+                )
             resp.raise_for_status()
             data = resp.json()
             logger.info(f"[GitHub] Created repo: {data['full_name']}")
@@ -149,3 +167,22 @@ class GitHubClient:
 
             logger.info(f"[GitHub] Pushed {len(files)} files to {repo} ({commit_sha[:8]})")
             return commit_sha
+
+    async def get_file_content(self, repo: str, path: str) -> str | None:
+        """Fetch file content from GitHub repo (tries main then master)."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for ref in ("main", "master"):
+                resp = await client.get(
+                    f"{API}/repos/{repo}/contents/{path}",
+                    headers=self.headers,
+                    params={"ref": ref},
+                )
+                if resp.status_code == 404:
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("encoding") == "base64":
+                    raw = (data.get("content") or "").replace("\n", "")
+                    return base64.b64decode(raw).decode("utf-8", errors="replace")
+                return data.get("content") or ""
+        return None

@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     APPWRITE_DATABASE_ID: str = "hackfarmer-db"
     APPWRITE_ZIP_BUCKET_ID: str = "generated-zips"
 
+    # ── Sentry DSN (optional) ──────────────────────────────────
+    SENTRY_DSN: str = ""
+
+    # ── Admin (optional) ──────────────────────────────────────
+    # Comma-separated list of Appwrite user IDs that can access /api/admin/*
+    ADMIN_USER_IDS: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 

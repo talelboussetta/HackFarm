@@ -28,12 +28,8 @@ def can_run_job(user_id: str) -> bool:
     )
     return result["total"] == 0
 
-async def promote_queued_jobs() -> list[str]:
-    """
-    For each user who has a queued job but no running job,
-    promote their oldest queued job to running in Appwrite.
-    """
-    # Find oldest queued jobs
+def _promote_sync() -> list[str]:
+    """Synchronous helper — safe to call from asyncio.to_thread()."""
     queued = databases.list_documents(
         settings.APPWRITE_DATABASE_ID, "jobs",
         [Query.equal("status", "queued"), Query.order_asc("$createdAt"), Query.limit(20)]
@@ -45,13 +41,17 @@ async def promote_queued_jobs() -> list[str]:
         if uid in seen_users:
             continue
         seen_users.add(uid)
-        if can_run_job(uid):  # no running job for this user
+        if can_run_job(uid):
             databases.update_document(
                 settings.APPWRITE_DATABASE_ID, "jobs", job["$id"],
                 {"status": "running"}
             )
             promoted.append(job["$id"])
     return promoted
+
+async def promote_queued_jobs() -> list[str]:
+    """Run the blocking Appwrite calls in a thread with a timeout."""
+    return await asyncio.wait_for(asyncio.to_thread(_promote_sync), timeout=15.0)
 
 async def start_queue_poller() -> None:
     """Poll every 30 seconds, promoting queued jobs for eligible users using Appwrite."""

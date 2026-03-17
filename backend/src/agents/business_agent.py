@@ -28,7 +28,7 @@ async def business_agent(state: ProjectState) -> dict:
     except Exception as e:
         log.error(f"business_agent CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "business_agent", "error": f"Unexpected: {e}"})
-        return {"errors": state.get("errors", []) + [f"business_agent: {type(e).__name__}: {e}"]}
+        return {"errors": [f"business_agent: {type(e).__name__}: {e}"]}
 
 
 async def _business_agent_impl(state: ProjectState) -> dict:
@@ -112,7 +112,7 @@ async def _business_agent_impl(state: ProjectState) -> dict:
                     })
                 except Exception:
                     pass
-            return {"errors": state.get("errors", []) + ["business_agent: LLM timed out"]}
+            return {"errors": ["business_agent: LLM timed out"]}
         except Exception as e:
             publish(job_id, "agent_failed", {
                 "agent": "business_agent", "error": str(e), "retry_count": attempt,
@@ -125,7 +125,7 @@ async def _business_agent_impl(state: ProjectState) -> dict:
                     })
                 except Exception:
                     pass
-            return {"errors": state.get("errors", []) + [f"business_agent: {e}"]}
+            return {"errors": [f"business_agent: {e}"]}
 
     publish(job_id, "agent_thinking", {
         "agent": "business_agent",
@@ -158,7 +158,7 @@ async def _business_agent_impl(state: ProjectState) -> dict:
                 })
             except Exception:
                 pass
-        return {"errors": state.get("errors", []) + [error_msg]}
+        return {"errors": [error_msg]}
 
     # Step 7: extract fields with safe defaults
     readme_content = data.get("readme_content", f"# {state.get('project_name', 'Project')}\n")

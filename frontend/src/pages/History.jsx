@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
+import EmptyState from '../components/EmptyState'
 import {
   History as HistoryIcon,
   ExternalLink,
@@ -10,7 +12,6 @@ import {
   Code2,
   Calendar,
   ChevronRight,
-  Download,
   Trash2,
   FileText,
   MessageSquare,
@@ -38,27 +39,43 @@ export default function History() {
   const navigate = useNavigate()
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [deleting, setDeleting] = useState(null)
+  const [total, setTotal] = useState(0)
+  const PAGE_SIZE = 20
+
+  const fetchJobs = async (offset = 0, append = false) => {
+    try {
+      const jwt = await getJWT()
+      if (!jwt) { navigate('/landing'); return }
+      const data = await api(`/api/jobs?offset=${offset}&limit=${PAGE_SIZE}`, {}, jwt)
+      // Handle both paginated and legacy array response
+      const jobList = data.jobs || (Array.isArray(data) ? data : [])
+      const jobTotal = data.total ?? jobList.length
+      if (append) {
+        setJobs(prev => [...prev, ...jobList])
+      } else {
+        setJobs(jobList)
+      }
+      setTotal(jobTotal)
+    } catch (e) {
+      log.error('Failed to fetch jobs:', e)
+      if (e.message?.includes('401') || e.message?.includes('Session expired')) {
+        navigate('/landing')
+      }
+    }
+  }
 
   useEffect(() => {
     if (!user) return
-    const fetchJobs = async () => {
-      try {
-        const jwt = await getJWT()
-        if (!jwt) { navigate('/landing'); return }
-        const data = await api('/api/jobs', {}, jwt)
-        setJobs(Array.isArray(data) ? data : [])
-      } catch (e) {
-        log.error('Failed to fetch jobs:', e)
-        if (e.message?.includes('401') || e.message?.includes('Session expired')) {
-          navigate('/landing')
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchJobs()
+    fetchJobs(0).finally(() => setLoading(false))
   }, [user, getJWT, navigate])
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true)
+    await fetchJobs(jobs.length, true)
+    setLoadingMore(false)
+  }
 
   const handleDelete = async (jobId) => {
     if (!confirm('Delete this project? This cannot be undone.')) return
@@ -68,8 +85,10 @@ export default function History() {
       if (!jwt) { navigate('/landing'); return }
       await api(`/api/jobs/${jobId}`, { method: 'DELETE' }, jwt)
       setJobs(jobs.filter(j => (j.id || j.$id) !== jobId))
+      toast.success('Project deleted')
     } catch (e) {
       log.error('Failed to delete job:', e)
+      toast.error('Failed to delete project')
     } finally {
       setDeleting(null)
     }
@@ -114,14 +133,18 @@ export default function History() {
           ))}
         </div>
       ) : jobs.length === 0 ? (
-        <div className="text-center py-20 bg-white/5 rounded-2xl border border-dashed border-white/10 space-y-4">
-          <Zap size={48} className="mx-auto text-white/10" />
-          <p className="text-white/40 text-lg">No projects yet</p>
-          <Button onClick={() => navigate('/')} variant="primary" size="lg">
-            Generate your first project
-          </Button>
-        </div>
+        <EmptyState
+          icon="projects"
+          title="No projects yet"
+          description="Generate your first AI-powered hackathon project in seconds. Just describe your idea and let our agents build it."
+          action={
+            <Button onClick={() => navigate('/')} variant="primary" size="lg">
+              Generate your first project
+            </Button>
+          }
+        />
       ) : (
+        <>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -142,7 +165,6 @@ export default function History() {
                   const repoName = job.repo_name || job.repoName || 'Untitled'
                   const inputType = job.input_type || job.inputType || 'text'
                   const githubUrl = job.github_url || job.githubUrl
-                  const zipFileId = job.zip_file_id || job.zipFileId
                   const createdAt = job.created_at || job.$createdAt || job.createdAt
 
                   return (
@@ -185,11 +207,6 @@ export default function History() {
                               <ExternalLink size={14} />
                             </a>
                           )}
-                          {zipFileId && (
-                            <a href={`/api/downloads/${jobId}`} className="p-1.5 text-white/30 hover:text-white transition-colors" title="Download ZIP">
-                              <Download size={14} />
-                            </a>
-                          )}
                           <button
                             onClick={() => handleDelete(jobId)}
                             disabled={deleting === jobId}
@@ -207,6 +224,14 @@ export default function History() {
             </tbody>
           </table>
         </div>
+        {jobs.length < total && (
+          <div className="flex justify-center pt-4">
+            <Button onClick={handleLoadMore} loading={loadingMore} variant="secondary" size="sm">
+              Load more ({jobs.length} of {total})
+            </Button>
+          </div>
+        )}
+        </>
       )}
     </div>
   )

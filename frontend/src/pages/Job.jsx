@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight, Trash2, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
+import { Github, Copy, Check, Loader2, AlertCircle, ChevronRight, Trash2, XCircle, RotateCcw } from 'lucide-react'
 import { useJobStream } from '../hooks/useJobStream'
 import { useAuth } from '../hooks/useAuth'
 import { api } from '../lib/api'
+import CodeViewer from '../components/CodeViewer'
+import RefinementPanel from '../components/RefinementPanel'
 import AgentPipelineGraph from '../components/AgentPipelineGraph'
 import AgentDrawer from '../components/AgentDrawer'
 import Lottie from 'lottie-react'
@@ -34,9 +37,25 @@ function MermaidDiagram({ chart }) {
     let cancelled = false
     import('mermaid').then(mod => {
       const mermaid = mod.default
-      mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { darkMode: true } })
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: {
+          darkMode: true,
+          primaryTextColor: '#e5e7eb',
+          textColor: '#e5e7eb',
+          lineColor: '#94a3b8',
+          edgeLabelBackground: '#111827',
+        },
+        flowchart: { htmlLabels: false },
+      })
       mermaid.render('mermaid-' + Date.now(), chart).then(({ svg }) => {
-        if (!cancelled) setSvg(DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } }))
+        if (!cancelled) {
+          const scaled = svg
+            .replace(/<svg([^>]*)>/, '<svg$1 style="max-width:100%;height:auto">')
+            .replace('</svg>', '<style>.nodeLabel,.edgeLabel,.label text{fill:#e5e7eb !important;color:#e5e7eb !important;}</style></svg>')
+          setSvg(DOMPurify.sanitize(scaled, { USE_PROFILES: { svg: true, svgFilters: true } }))
+        }
       }).catch(() => {})
     })
     return () => { cancelled = true }
@@ -104,7 +123,6 @@ export default function Job() {
   const { getJWT } = useAuth()
 
   const [selectedNode, setSelectedNode] = useState(null)
-  const [selectedFile, setSelectedFile] = useState(null)
   const [rightTab, setRightTab] = useState('code')
   const [confettiFired, setConfettiFired] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -135,35 +153,27 @@ export default function Job() {
   const agentsDone = AGENT_KEYS.filter(k => agentStates[k]?.status === 'done').length
   const totalFiles = AGENT_KEYS.reduce((n, k) => n + (agentStates[k]?.files?.length || 0), 0)
   const validationScore = agentStates.validator?.status === 'done' ? (result?.validation_score || '—') : '—'
+  const statusClass = jobStatus === 'complete'
+    ? 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-green-500/20 text-green-400'
+    : jobStatus === 'failed'
+      ? 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-red-500/20 text-red-400'
+      : 'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-blue-500/20 text-blue-400'
+  const statusLabel = jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'
 
-  // Collect all generated file paths
-  const fileList = useMemo(() => {
-    const files = []
-    AGENT_KEYS.forEach(k => { agentStates[k]?.files?.forEach(f => { if (!files.includes(f)) files.push(f) }) })
-    return files.sort()
-  }, [agentStates])
-
-  const groupedFiles = useMemo(() => {
-    const groups = { frontend: [], backend: [], config: [] }
-    fileList.forEach(f => {
-      if (f.startsWith('frontend/')) groups.frontend.push(f)
-      else if (f.startsWith('backend/')) groups.backend.push(f)
-      else groups.config.push(f)
-    })
-    return groups
-  }, [fileList])
-
-  const mermaidChart = businessContent?.architecture_mermaid || null
+  const mermaidChart = businessContent?.architecture_mermaid || (
+    (jobStatus === 'complete' || jobStatus === 'completed')
+      ? 'graph TD\n  A[Architecture summary unavailable] --> B[Open agent details]\n  A --> C[Run Refine with AI to regenerate architecture]'
+      : null
+  )
   const readmeContent = businessContent?.readme_content || null
   const pitchSlides = businessContent?.pitch_slides || []
   const githubUrl = result?.github_url || null
-  const zipFileId = result?.zip_file_id || null
   const repoName = result?.repo_name || id
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
-  const handleCopyUrl = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000) }
-  const handleDownload = () => { window.open(`/api/downloads/${id}`, '_blank') }
+  const handleCopyUrl = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); toast.success('URL copied to clipboard'); setTimeout(() => setCopied(false), 2000) }
+  // Download removed (ZIP generation disabled)
 
   const handleDelete = async () => {
     const label = jobStatus === 'running' || jobStatus === 'queued' ? 'Cancel this running job' : 'Delete this project'
@@ -172,9 +182,11 @@ export default function Job() {
     try {
       const jwt = await getJWT()
       await api(`/api/jobs/${id}`, { method: 'DELETE' }, jwt)
+      toast.success(jobStatus === 'running' ? 'Job cancelled' : 'Project deleted')
       navigate('/history')
     } catch (e) {
       log.error('Delete failed:', e)
+      toast.error('Failed to delete project')
       setDeleting(false)
     }
   }
@@ -204,7 +216,12 @@ export default function Job() {
               ))}
             </div>
           )}
-          <Button onClick={() => navigate('/')} variant="secondary">Try Again</Button>
+          <div className="flex gap-3">
+            <Button onClick={() => navigate('/')} variant="primary" className="gap-2">
+              <RotateCcw size={14} /> Retry with new settings
+            </Button>
+            <Button onClick={() => navigate('/history')} variant="secondary">View History</Button>
+          </div>
         </div>
       </div>
     )
@@ -243,11 +260,7 @@ export default function Job() {
         {/* Timer + status + delete */}
         <div className="flex items-center gap-3 text-sm">
           <span className="text-white/40 tabular-nums font-mono text-xs">{formatTime(elapsed)}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-            jobStatus === 'complete' ? 'bg-green-500/20 text-green-400' : jobStatus === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'
-          }`}>
-            {jobStatus === 'complete' ? 'Complete' : jobStatus === 'failed' ? 'Failed' : 'Running'}
-          </span>
+          <span className={statusClass}>{statusLabel}</span>
           <button
             onClick={handleDelete}
             disabled={deleting}
@@ -319,56 +332,8 @@ export default function Job() {
 
             {/* Code tab */}
             {rightTab === 'code' && (
-              <div className="flex h-full overflow-hidden">
-                {/* File tree */}
-                <div className="w-[30%] border-r border-white/10 overflow-y-auto p-2 space-y-2">
-                  {fileList.length === 0 ? (
-                    <Skeleton lines={3} />
-                  ) : (
-                    <>
-                      {groupedFiles.frontend.length > 0 && (
-                        <FileGroup label="Frontend" color="text-cyan-400" files={groupedFiles.frontend}
-                          selectedFile={selectedFile} onSelect={setSelectedFile} />
-                      )}
-                      {groupedFiles.backend.length > 0 && (
-                        <FileGroup label="Backend" color="text-amber-400" files={groupedFiles.backend}
-                          selectedFile={selectedFile} onSelect={setSelectedFile} />
-                      )}
-                      {groupedFiles.config.length > 0 && (
-                        <FileGroup label="Config" color="text-white/40" files={groupedFiles.config}
-                          selectedFile={selectedFile} onSelect={setSelectedFile} />
-                      )}
-                    </>
-                  )}
-                </div>
-                {/* Code viewer */}
-                <div className="w-[70%] overflow-auto">
-                  {selectedFile ? (
-                    jobStatus === 'complete' ? (
-                      <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-6">
-                        <div className="text-white/30 text-sm">
-                          <p className="text-white/50 font-medium mb-1">{selectedFile.split('/').pop()}</p>
-                          <p>File preview available after download</p>
-                        </div>
-                        {zipFileId && (
-                          <button onClick={handleDownload}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg text-sm hover:bg-blue-500/30 transition-colors">
-                            <Download size={14} /> Download ZIP
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-full gap-3 text-center p-6">
-                        <Loader2 size={20} className="text-blue-400 animate-spin" />
-                        <p className="text-white/30 text-sm">Generating files...</p>
-                      </div>
-                    )
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-white/20 text-sm">
-                      Select a file to view
-                    </div>
-                  )}
-                </div>
+              <div className="h-full">
+                <CodeViewer jobId={id} jobStatus={jobStatus} />
               </div>
             )}
 
@@ -412,11 +377,6 @@ export default function Job() {
                   <Github size={16} /> Open on GitHub
                 </a>
               )}
-              {zipFileId && (
-                <Button onClick={handleDownload} variant="secondary" className="gap-2">
-                  <Download size={16} /> Download ZIP
-                </Button>
-              )}
               <button onClick={handleCopyUrl}
                 className="p-2.5 rounded-lg bg-white/10 text-white/60 hover:text-white transition-colors" title="Copy link">
                 {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -426,6 +386,9 @@ export default function Job() {
         )}
       </AnimatePresence>
 
+      {/* Refinement Panel — refine completed/failed jobs */}
+      <RefinementPanel jobId={id} jobStatus={jobStatus} />
+
       {/* Agent Drawer */}
       <AgentDrawer
         agentKey={selectedNode}
@@ -433,33 +396,6 @@ export default function Job() {
         allEvents={[]}
         onClose={() => setSelectedNode(null)}
       />
-    </div>
-  )
-}
-
-function FileGroup({ label, color, files, selectedFile, onSelect }) {
-  const [open, setOpen] = useState(true)
-  return (
-    <div>
-      <button onClick={() => setOpen(!open)} className={`flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider w-full px-1 py-1 ${color}`}>
-        <ChevronRight size={10} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
-        📁 {label} ({files.length})
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden">
-            {files.map(f => (
-              <button key={f} onClick={() => onSelect(f)}
-                className={`w-full text-left text-[11px] font-mono px-3 py-0.5 rounded truncate transition-colors ${
-                  selectedFile === f ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:text-white hover:bg-white/5'
-                }`}>
-                {f.split('/').pop()}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

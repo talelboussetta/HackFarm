@@ -1,9 +1,19 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion'
 import { Github, Mail, Lock, User, Eye, EyeOff, ChevronDown } from 'lucide-react'
+import { toast } from 'sonner'
+import { z } from 'zod'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import Lenis from '@studio-freight/lenis'
+
+const loginSchema = z.object({
+  email: z.string().email('Enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+})
+const signupSchema = loginSchema.extend({
+  name: z.string().min(1, 'Name is required').max(100),
+})
 
 /* ─── design tokens ─── */
 const gold = '#c9a84c'
@@ -86,10 +96,11 @@ const inView = (i = 0) => ({ initial: { opacity: 0, y: 30 }, whileInView: { opac
 
 /* ────────────────────────────────────────────────────── */
 export default function Landing() {
-  const { loginWithGitHub, loginWithEmail, signupWithEmail, error: authError } = useAuth()
+  const { user, loginWithGitHub, loginWithEmail, signupWithEmail, error: authError } = useAuth()
   const navigate = useNavigate()
 
-  /* auth modal state (preserved) */
+  /* if already logged in, show a banner to go to app */
+  /* auth modal state */
   const [authMode, setAuthMode] = useState(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -166,16 +177,30 @@ export default function Landing() {
   const handleEmailAuth = async (e) => {
     e.preventDefault()
     setLocalError(null)
+
+    // Validate form
+    const schema = authMode === 'signup' ? signupSchema : loginSchema
+    const result = schema.safeParse({ email, password, ...(authMode === 'signup' ? { name: name || email.split('@')[0] } : {}) })
+    if (!result.success) {
+      const msg = result.error.issues[0].message
+      setLocalError(msg)
+      toast.error(msg)
+      return
+    }
+
     setLoading(true)
     try {
       if (authMode === 'signup') {
         await signupWithEmail(email, password, name || email.split('@')[0])
+        toast.success('Account created!')
       } else {
         await loginWithEmail(email, password)
+        toast.success('Welcome back!')
       }
-      navigate('/')
+      navigate('/app')
     } catch (err) {
       setLocalError(err.message)
+      toast.error(err.message || 'Authentication failed')
     } finally {
       setLoading(false)
     }
@@ -230,14 +255,13 @@ export default function Landing() {
             >{s}</button>
           ))}
         </div>
-        <button onClick={loginWithGitHub} style={{
-          background: '#000', color: lime, border: `1px solid ${lime}`, borderRadius: 8,
+        <button onClick={user ? () => navigate('/app') : () => setAuthMode('login')} style={{
           padding: '8px 18px', fontSize: 13, fontFamily: outfit, fontWeight: 500, cursor: 'pointer',
           transition: 'background 0.2s, color 0.2s',
         }}
         onMouseEnter={e => { e.target.style.background = lime; e.target.style.color = '#000' }}
         onMouseLeave={e => { e.target.style.background = '#000'; e.target.style.color = lime }}
-        >Start Building →</button>
+        >{user ? 'Open App →' : 'Start Building →'}</button>
       </nav>
 
       {/* ── Mobile nav (logo + CTA only) ── */}
@@ -291,7 +315,7 @@ export default function Landing() {
               display: 'inline-block', padding: '8px 20px', borderRadius: 100,
               background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.2)',
               fontFamily: outfit, fontSize: 14, fontWeight: 400, color: gold, letterSpacing: 0.3,
-            }}>🌾 Now in Beta — Free to use</span>
+            }}>🌾 Open Source — 100% Free</span>
           </motion.div>
 
           {/* h1 */}
@@ -313,22 +337,22 @@ export default function Landing() {
 
           {/* CTAs */}
           <motion.div {...stagger(3)} style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 48 }}>
-            <button onClick={loginWithGitHub} style={{
-              background: lime, color: '#000', border: 'none', borderRadius: 12,
+            <button onClick={user ? () => navigate('/app') : () => setAuthMode('signup')} style={{
               padding: '16px 36px', fontSize: 16, fontFamily: outfit, fontWeight: 500, cursor: 'pointer',
               transition: 'transform 0.2s, box-shadow 0.2s',
             }}
             onMouseEnter={e => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = `0 8px 30px ${lime}33` }}
             onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = 'none' }}
-            >Generate a project →</button>
-            <button onClick={() => scrollTo('agent-01')} style={{
+            >{user ? `Welcome back, ${user.name?.split(' ')[0] || 'builder'} → Open App` : 'Generate a project →'}</button>
+            <a href="https://github.com/talelboussetta/HackFarm" target="_blank" rel="noreferrer" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
               background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.2)',
               borderRadius: 12, padding: '16px 36px', fontSize: 16, fontFamily: outfit, fontWeight: 400, cursor: 'pointer',
-              transition: 'border-color 0.2s',
+              transition: 'border-color 0.2s, background 0.2s', textDecoration: 'none',
             }}
-            onMouseEnter={e => e.target.style.borderColor = 'rgba(255,255,255,0.5)'}
-            onMouseLeave={e => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
-            >Watch it work ↓</button>
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'transparent' }}
+            >⭐ Star on GitHub</a>
           </motion.div>
 
           {/* stats */}
@@ -573,6 +597,52 @@ export default function Landing() {
         </motion.div>
       </section>
 
+      {/* ═══════════════ SECTION 12.5: HOW IT WORKS ═══════════════ */}
+      <section style={{ padding: '120px 0', position: 'relative' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 5vw' }}>
+          <motion.h2 {...inView(0)} style={{ fontFamily: syne, fontWeight: 800, fontSize: 'clamp(36px, 4.5vw, 56px)', textAlign: 'center', marginBottom: 16, letterSpacing: '-0.02em' }}>
+            How it works
+          </motion.h2>
+          <motion.p {...inView(1)} style={{ fontFamily: outfit, fontSize: 18, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 64 }}>
+            Three steps. Under two minutes. Zero config.
+          </motion.p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {[
+              { step: '01', title: 'Describe your idea', desc: 'Type a prompt or upload a PDF/DOCX spec. Our analyst agent extracts features, constraints, and scope automatically.', accent: electric },
+              { step: '02', title: 'Watch agents build', desc: 'Seven specialized AI agents work in parallel — designing architecture, writing frontend & backend code, creating pitch decks, and validating everything.', accent: lime },
+              { step: '03', title: 'Ship it', desc: 'Your complete project is pushed to GitHub with full code, README, architecture diagrams, and a pitch deck. Download the ZIP or open it directly.', accent: gold },
+            ].map((s, i) => (
+              <motion.div key={i} {...inView(i * 0.15)} style={{ display: 'flex', gap: 32, padding: '40px 0', borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none', alignItems: 'flex-start' }}>
+                <div style={{ fontFamily: mono, fontSize: 48, fontWeight: 800, color: s.accent, opacity: 0.3, lineHeight: 1, flexShrink: 0, minWidth: 80 }}>{s.step}</div>
+                <div>
+                  <h3 style={{ fontFamily: syne, fontWeight: 700, fontSize: 24, marginBottom: 8 }}>{s.title}</h3>
+                  <p style={{ fontFamily: outfit, fontSize: 16, color: 'rgba(255,255,255,0.45)', lineHeight: 1.7 }}>{s.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════ SECTION 12.7: FAQ ═══════════════ */}
+      <section style={{ padding: '120px 0', position: 'relative' }}>
+        <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 5vw' }}>
+          <motion.h2 {...inView(0)} style={{ fontFamily: syne, fontWeight: 800, fontSize: 'clamp(36px, 4.5vw, 56px)', textAlign: 'center', marginBottom: 56, letterSpacing: '-0.02em' }}>
+            FAQ
+          </motion.h2>
+          {[
+            { q: 'Is it free?', a: 'Yes — HackFarmer is 100% free. You bring your own LLM API keys (Gemini, Groq, or OpenRouter), so you only pay your provider\'s rates. No hidden fees, no premium tier, no credit card required.' },
+            { q: 'What LLM providers are supported?', a: 'We support Google Gemini, Groq, and OpenRouter. You can add multiple keys and we\'ll automatically fallback between them if one fails.' },
+            { q: 'Is my code private?', a: 'Absolutely. Your API keys are Fernet-encrypted at rest. Generated code is pushed to your own GitHub account (public or private, your choice). We never store your source code on our servers.' },
+            { q: 'What kinds of projects can it generate?', a: 'Full-stack web apps with a React + Vite frontend and FastAPI backend. Think: dashboards, SaaS apps, hackathon projects, MVPs, internal tools — anything describable in a spec.' },
+            { q: 'How long does generation take?', a: 'Typically 60–90 seconds. Our agents run in parallel (frontend, backend, and business docs all generate simultaneously), so it\'s much faster than sequential generation.' },
+            { q: 'Can I edit the generated code?', a: 'Yes — the code is pushed to your GitHub repo, so you can clone it and modify anything. You can also preview all files directly in HackFarmer\'s built-in code viewer with syntax highlighting.' },
+          ].map((faq, i) => (
+            <FaqItem key={i} q={faq.q} a={faq.a} i={i} />
+          ))}
+        </div>
+      </section>
+
       {/* ═══════════════ SECTION 13: FINAL CTA ═══════════════ */}
       <section id="start" style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
@@ -598,22 +668,22 @@ export default function Landing() {
             Your next hackathon project, fully generated, pushed to GitHub, ready to demo.
           </motion.p>
           <motion.div {...inView(2)}>
-            <button onClick={loginWithGitHub} style={{
+            <button onClick={user ? () => navigate('/app') : () => setAuthMode('signup')} style={{
               background: lime, color: '#000', border: 'none', borderRadius: 16,
               padding: '22px 56px', fontSize: 20, fontFamily: outfit, fontWeight: 500, cursor: 'pointer',
               transition: 'transform 0.2s, box-shadow 0.2s',
             }}
             onMouseEnter={e => { e.target.style.transform = 'translateY(-3px)'; e.target.style.boxShadow = `0 12px 40px ${lime}44` }}
             onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = 'none' }}
-            >Generate your first project →</button>
+            >{user ? 'Open App →' : 'Generate your first project →'}</button>
           </motion.div>
           <motion.p {...inView(3)} style={{
             fontFamily: outfit, fontWeight: 400, fontSize: 14, color: 'rgba(255,255,255,0.3)',
             marginTop: 32, display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap',
           }}>
-            <span>✓ Free to use</span>
+            <span>✓ 100% free</span>
             <span>✓ No credit card</span>
-            <span>✓ GitHub OAuth only</span>
+            <span>✓ Open source</span>
           </motion.p>
         </div>
 
@@ -621,10 +691,16 @@ export default function Landing() {
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
           borderTop: '1px solid rgba(255,255,255,0.06)',
-          padding: '24px 32px', textAlign: 'center',
+          padding: '24px 32px',
           fontFamily: outfit, fontSize: 13, color: 'rgba(255,255,255,0.2)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
         }}>
-          HackFarmer © 2025 &nbsp;|&nbsp; Built with LangGraph · Appwrite · FastAPI · React
+          <span>HackFarmer © {new Date().getFullYear()}</span>
+          <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+            <a href="https://github.com/talelboussetta/HackFarm" target="_blank" rel="noreferrer" style={{ color: 'rgba(255,255,255,0.3)', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.3)'}>GitHub</a>
+            <span style={{ color: 'rgba(255,255,255,0.1)' }}>·</span>
+            <span>Built with LangGraph · Appwrite · FastAPI · React</span>
+          </div>
         </div>
       </section>
 
@@ -763,4 +839,41 @@ function archBox(accent) {
     background: 'rgba(255,255,255,0.03)', border: `1px solid ${accent}30`,
     minWidth: 180,
   }
+}
+
+function FaqItem({ q, a, i }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.4, delay: i * 0.05 }}
+      style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+    >
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '24px 0', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600, fontSize: 18, color: '#fff' }}>{q}</span>
+        <span style={{ fontSize: 24, color: 'rgba(255,255,255,0.3)', transform: open ? 'rotate(45deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0, marginLeft: 16 }}>+</span>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 15, color: 'rgba(255,255,255,0.45)', lineHeight: 1.7, paddingBottom: 24 }}>{a}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
 }

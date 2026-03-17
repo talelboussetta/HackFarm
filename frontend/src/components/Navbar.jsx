@@ -22,7 +22,7 @@ export default function Navbar() {
   }, [])
 
   const navItems = [
-    { name: 'Home', path: '/', icon: Layout },
+    { name: 'Home', path: '/app', icon: Layout },
     { name: 'History', path: '/history', icon: History },
   ]
 
@@ -30,23 +30,25 @@ export default function Navbar() {
   const initials = user?.name?.[0]?.toUpperCase() || 'U'
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.08] bg-[#0a0a0a]/80 backdrop-blur-xl">
+    <nav role="navigation" aria-label="Main navigation" className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.08] bg-[#0a0a0a]/80 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-8">
-            <Link to="/" className="flex items-center gap-2 group">
+            <Link to="/" className="flex items-center gap-2 group" aria-label="HackFarmer home">
               <span className="text-white font-bold text-xl tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                 HackFarmer
               </span>
             </Link>
 
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-1" role="menubar">
               {navItems.map((item) => {
                 const isActive = location.pathname === item.path
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
+                    role="menuitem"
+                    aria-current={isActive ? 'page' : undefined}
                     className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
                       isActive 
                         ? 'text-white bg-white/5' 
@@ -66,6 +68,9 @@ export default function Navbar() {
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
+                  aria-expanded={dropdownOpen}
+                  aria-haspopup="true"
+                  aria-label="User menu"
                   className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
                 >
                   {avatar ? (

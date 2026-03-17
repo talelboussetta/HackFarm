@@ -1,13 +1,126 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, MessageSquare, Zap, X, Github, Lock, Globe, AlertTriangle, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { z } from 'zod'
+import { Upload, MessageSquare, Zap, X, Github, Lock, Globe, AlertTriangle, Loader2, BarChart3, CheckCircle2, XCircle, Clock, Sparkles, LayoutTemplate } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useJobSubmit } from '../hooks/useJobSubmit'
 import Button from '../components/Button'
 import Lottie from 'lottie-react'
 import submitAnim from '../animations/submit.json'
+
+const jobSchema = z.object({
+  repoName: z.string()
+    .min(1, 'Repository name is required')
+    .max(100, 'Repository name too long (max 100)')
+    .regex(/^[a-zA-Z0-9_.-]+$/, 'Only letters, numbers, hyphens, dots, and underscores'),
+  prompt: z.string().max(15000, 'Prompt too long (max 15,000 characters)').optional().nullable(),
+})
+
+const TEMPLATES = [
+  {
+    id: 'saas-dashboard',
+    emoji: '📊',
+    name: 'SaaS Dashboard',
+    desc: 'Admin panel with charts, user management, and settings',
+    prompt: `Build a modern SaaS admin dashboard with the following features:
+
+1. **Dashboard Home**: Stats cards (total users, revenue, active sessions, growth %), a line chart showing weekly signups, and a bar chart for revenue by month.
+2. **User Management**: A searchable, sortable table of users with name, email, role, status (active/inactive), and join date. Include actions to edit role, disable account, and delete.
+3. **Settings Page**: Profile settings (name, email, avatar upload), notification preferences (toggle switches), and a danger zone with "Delete Account" confirmation.
+4. **Authentication**: Login and signup pages with email/password. Protected routes that redirect to login if not authenticated.
+5. **Sidebar Navigation**: Collapsible sidebar with Dashboard, Users, Settings, and Logout links. Active state highlighting.
+
+Tech preferences: Use Tailwind CSS for styling, Recharts for charts, and React Router for navigation. Dark theme by default.`,
+    repoName: 'saas-dashboard',
+  },
+  {
+    id: 'ecommerce',
+    emoji: '🛒',
+    name: 'E-commerce Store',
+    desc: 'Product catalog, cart, and checkout flow',
+    prompt: `Build a modern e-commerce web application with:
+
+1. **Product Catalog**: Grid of product cards showing image placeholder, name, price, rating (stars), and "Add to Cart" button. Filter sidebar with categories and price range slider. Search bar with instant results.
+2. **Product Detail Page**: Large image area, title, description, price, quantity selector, "Add to Cart" button, and related products carousel.
+3. **Shopping Cart**: Slide-out cart drawer showing items, quantities (adjustable), individual and total prices, remove button, and "Proceed to Checkout" CTA.
+4. **Checkout Flow**: Multi-step form — shipping address, payment details (mock), order review, and confirmation page with order number.
+5. **Backend API**: Products CRUD, cart management (add/remove/update), and order creation with validation.
+
+Use a clean, minimal design. Include loading skeletons and empty states.`,
+    repoName: 'ecommerce-store',
+  },
+  {
+    id: 'chat-app',
+    emoji: '💬',
+    name: 'Real-time Chat',
+    desc: 'Messaging app with rooms and user presence',
+    prompt: `Build a real-time chat application with:
+
+1. **Chat Rooms**: List of available rooms in a sidebar. Users can create new rooms with a name and description. Each room shows the last message preview and unread count.
+2. **Message Thread**: Messages displayed with sender name, avatar (initials), timestamp, and content. Support for text messages. Auto-scroll to latest message.
+3. **User Presence**: Show online/offline status with colored dots. Display "X users online" count per room.
+4. **Message Input**: Text input with send button and Enter key support. Show "User is typing..." indicator.
+5. **User Profile**: Display name, avatar initials, and status (online/away/busy). Settings to update display name.
+6. **Backend**: REST API for rooms (CRUD), messages (create, list with pagination), and user management.
+
+Modern dark theme with smooth animations. Mobile-responsive layout.`,
+    repoName: 'chat-app',
+  },
+  {
+    id: 'task-manager',
+    emoji: '✅',
+    name: 'Task Manager',
+    desc: 'Kanban board with drag-and-drop task tracking',
+    prompt: `Build a project task management app (like a mini Trello) with:
+
+1. **Kanban Board**: Three columns — "To Do", "In Progress", "Done". Cards show task title, priority badge (low/medium/high with colors), assignee avatar, and due date.
+2. **Task Creation**: Modal form with title, description (markdown), priority dropdown, assignee dropdown, due date picker, and tags input.
+3. **Task Detail View**: Expandable card or modal showing full description, comments section, activity log, and edit/delete actions.
+4. **Project Sidebar**: List of projects. Create new project with name and color. Switch between project boards.
+5. **Filtering & Search**: Filter tasks by assignee, priority, or tag. Global search across all tasks.
+6. **Backend API**: Projects CRUD, tasks CRUD with status updates, comments, and basic user management.
+
+Clean UI with subtle animations. Support drag-and-drop between columns.`,
+    repoName: 'task-manager',
+  },
+  {
+    id: 'blog-platform',
+    emoji: '📝',
+    name: 'Blog Platform',
+    desc: 'Content management with markdown editor',
+    prompt: `Build a blog/content platform with:
+
+1. **Public Blog Feed**: Card-based list of published posts with title, excerpt, author name, publish date, read time, and tags. Pagination or infinite scroll.
+2. **Post Reader**: Clean article layout with title, author info, publish date, markdown-rendered content, and tag pills. Estimated read time. Share buttons.
+3. **Admin Editor**: Markdown editor with live preview side-by-side. Title input, tag selector, featured image URL, and publish/draft toggle. Auto-save indicator.
+4. **Author Dashboard**: List of your posts (published/draft), view count per post, and quick actions (edit, delete, toggle publish).
+5. **Authentication**: Login/signup for authors. Public readers don't need accounts.
+6. **Backend**: Posts CRUD with draft/published status, tags, search by title/content, and author management.
+
+Typography-focused design. Light/dark mode toggle.`,
+    repoName: 'blog-platform',
+  },
+  {
+    id: 'ai-tool',
+    emoji: '🤖',
+    name: 'AI Wrapper Tool',
+    desc: 'LLM-powered tool with prompt templates',
+    prompt: `Build an AI-powered productivity tool with:
+
+1. **Prompt Library**: Grid of pre-built prompt templates (e.g., "Summarize Text", "Write Email", "Explain Code", "Generate Ideas", "Translate"). Each card shows title, description, and icon.
+2. **Workspace**: Select a template, fill in the input field(s), click "Generate". Show a loading animation, then display the AI response in a formatted output area with copy button.
+3. **History**: List of past generations with input preview, output preview, template used, and timestamp. Click to expand full content. Delete individual entries.
+4. **Custom Prompts**: Create your own prompt template with name, system prompt, and input field labels. Save to personal library.
+5. **Settings**: API key configuration, default model selection, response length preference.
+6. **Backend**: Prompt templates CRUD, generation history, and a proxy endpoint that calls OpenAI-compatible APIs.
+
+Sleek dark UI. Markdown rendering for outputs. Responsive design.`,
+    repoName: 'ai-tool',
+  },
+]
 
 export default function Home() {
   const navigate = useNavigate()
@@ -21,6 +134,17 @@ export default function Home() {
   const [repoPrivate, setRepoPrivate] = useState(false)
   const [retentionDays, setRetentionDays] = useState(30)
   const [localError, setLocalError] = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [stats, setStats] = useState(null)
+  const [modelPref, setModelPref] = useState('')
+
+  // Fetch user stats for dashboard
+  useEffect(() => {
+    fetch('/api/jobs-stats', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => data && setStats(data))
+      .catch(() => {})
+  }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
@@ -44,6 +168,23 @@ export default function Home() {
 
   const handleSubmit = async () => {
     setLocalError(null)
+    setFieldErrors({})
+
+    // Client-side validation
+    const validation = jobSchema.safeParse({
+      repoName: repoName.trim(),
+      prompt: tab === 'describe' ? prompt.trim() : null,
+    })
+    if (!validation.success) {
+      const errors = {}
+      validation.error.issues.forEach(issue => {
+        errors[issue.path[0]] = issue.message
+      })
+      setFieldErrors(errors)
+      toast.error(Object.values(errors)[0])
+      return
+    }
+
     try {
       const result = await submit({
         file: tab === 'upload' ? file : null,
@@ -51,10 +192,13 @@ export default function Home() {
         repoName: repoName.trim(),
         repoPrivate,
         retentionDays,
+        modelPreference: modelPref || null,
       })
+      toast.success('Project generation started!')
       navigate(`/job/${result.job_id}`)
     } catch (err) {
       setLocalError(err.message)
+      toast.error(err.message || 'Failed to create project')
     }
   }
 
@@ -98,6 +242,64 @@ export default function Home() {
           </motion.p>
         </div>
       </section>
+
+      {/* Dashboard Stats */}
+      {stats && stats.total_projects > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-3"
+        >
+          {[
+            { label: 'Projects', value: stats.total_projects, icon: BarChart3, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+            { label: 'Completed', value: stats.completed, icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10' },
+            { label: 'Failed', value: stats.failed, icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/10' },
+            { label: 'Success Rate', value: `${stats.success_rate}%`, icon: Zap, color: 'text-amber-400', bg: 'bg-amber-400/10' },
+          ].map(s => (
+            <div key={s.label} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+              <div className={`p-2 rounded-lg ${s.bg}`}>
+                <s.icon size={16} className={s.color} />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-white">{s.value}</div>
+                <div className="text-[10px] text-white/30 uppercase tracking-wider">{s.label}</div>
+              </div>
+            </div>
+          ))}
+        </motion.section>
+      )}
+
+      {/* Template Picker */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm text-white/40">
+          <LayoutTemplate size={14} />
+          <span className="font-medium">Start from a template</span>
+          <span className="text-white/20">or describe your own below</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {TEMPLATES.map(t => (
+            <motion.button
+              key={t.id}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                setTab('describe')
+                setPrompt(t.prompt)
+                setRepoName(t.repoName)
+                toast.success(`Template "${t.name}" loaded`)
+              }}
+              className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/15 hover:bg-white/[0.06] transition-all text-left group"
+            >
+              <span className="text-xl mt-0.5">{t.emoji}</span>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white/80 group-hover:text-white truncate">{t.name}</div>
+                <div className="text-[11px] text-white/30 truncate">{t.desc}</div>
+              </div>
+            </motion.button>
+          ))}
+        </div>
+      </div>
 
       {/* Tabs */}
       <div className="space-y-6">
@@ -162,19 +364,24 @@ export default function Home() {
                   value={prompt}
                   onChange={(e) => {
                     setPrompt(e.target.value)
+                    setFieldErrors(prev => ({...prev, prompt: undefined}))
                     if (!repoName && e.target.value.length > 10) {
                       const slug = e.target.value.slice(0, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')
                       setRepoName(slug)
                     }
                   }}
                   placeholder="Describe what you're building — the problem, users, and tech you want"
-                  className="w-full min-h-[160px] bg-black/20 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
+                  className={`w-full min-h-[160px] bg-black/20 border rounded-xl p-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${fieldErrors.prompt ? 'border-red-500/50' : 'border-white/10'}`}
                 />
-                <div className="absolute bottom-3 right-3">
+                <div className="absolute bottom-3 right-3 flex items-center gap-3">
+                  <span className={`text-[10px] px-2 py-1 rounded tabular-nums ${prompt.length > 14000 ? 'text-red-400' : 'text-white/20'}`}>
+                    {prompt.length.toLocaleString()}/15,000
+                  </span>
                   <span className="text-[10px] text-white/20 bg-white/5 px-2 py-1 rounded cursor-default" title="Coming soon">
                     ✨ Enhance with AI
                   </span>
                 </div>
+                {fieldErrors.prompt && <p className="text-xs text-red-400 mt-1">{fieldErrors.prompt}</p>}
               </div>
             </motion.div>
           )}
@@ -197,10 +404,11 @@ export default function Home() {
                 <input
                   type="text"
                   value={repoName}
-                  onChange={(e) => setRepoName(e.target.value.replace(/[^a-zA-Z0-9_.-]/g, ''))}
+                  onChange={(e) => { setRepoName(e.target.value.replace(/[^a-zA-Z0-9_.-]/g, '')); setFieldErrors(prev => ({...prev, repoName: undefined})) }}
                   placeholder="my-awesome-project"
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-blue-500/50 outline-none"
+                  className={`w-full bg-black/40 border rounded-lg px-4 py-2 text-sm focus:border-blue-500/50 outline-none ${fieldErrors.repoName ? 'border-red-500/50' : 'border-white/10'}`}
                 />
+                {fieldErrors.repoName && <p className="text-xs text-red-400 mt-1">{fieldErrors.repoName}</p>}
               </div>
 
               <div className="flex items-center justify-between">
@@ -234,6 +442,21 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-white/60">AI Model</span>
+                <select
+                  value={modelPref}
+                  onChange={e => setModelPref(e.target.value)}
+                  className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 focus:border-blue-400/50 outline-none cursor-pointer appearance-none"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', paddingRight: '24px' }}
+                >
+                  <option value="">Auto (recommended)</option>
+                  <option value="gemini">Gemini 2.0 Flash</option>
+                  <option value="groq">Llama 3.3 70B (Groq)</option>
+                  <option value="openrouter">Llama 3.3 70B (OpenRouter)</option>
+                </select>
               </div>
             </div>
 

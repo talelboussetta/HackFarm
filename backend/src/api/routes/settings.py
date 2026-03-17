@@ -33,7 +33,7 @@ ALLOWED_PROVIDERS = {"gemini", "groq", "openrouter"}
 # Provider → (base_url, model, header_builder)
 PROVIDER_CONFIG = {
     "gemini": {
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "model": "gemini-2.0-flash",
     },
     "groq": {
@@ -43,6 +43,10 @@ PROVIDER_CONFIG = {
     "openrouter": {
         "base_url": "https://openrouter.ai/api/v1",
         "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "extra_headers": {
+            "HTTP-Referer": "https://hackfarmer.dev",
+            "X-Title": "HackFarmer",
+        },
     },
 }
 
@@ -195,19 +199,94 @@ async def test_key(
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
+            headers = {
+                "Authorization": f"Bearer {decrypted_key}",
+                "Content-Type": "application/json",
+            }
+            # Merge provider-specific extra headers (e.g., OpenRouter requires Referer/X-Title)
+            headers.update(cfg.get("extra_headers", {}))
+
+            url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
+
             resp = await client.post(
-                f"{cfg['base_url'].rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {decrypted_key}",
-                    "Content-Type": "application/json",
-                },
+                url,
+                headers=headers,
                 json={
                     "model": cfg["model"],
                     "messages": [{"role": "user", "content": "Reply with the single word: ok"}],
                     "max_tokens": 10,
                 },
             )
-            resp.raise_for_status()
+
+            # Gemini specifics: keep Authorization header (required for some backends)
+            # and optionally pass ?key= for the OpenAI-compatible shim. Only try the
+            # alternate form when the error suggests auth issues (not for rate limits).
+            if provider == "gemini" and resp.status_code in {400, 401, 403}:
+                try:
+                    alt_headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {decrypted_key}",
+                    }
+                    alt_headers.update(cfg.get("extra_headers", {}))
+                    alt_resp = await client.post(
+                        url,
+                        headers=alt_headers,
+                        params={"key": decrypted_key},
+                        json={
+                            "model": cfg["model"],
+                            "messages": [{"role": "user", "content": "Reply with the single word: ok"}],
+                            "max_tokens": 10,
+                        },
+                    )
+                    resp = alt_resp
+                except Exception:
+                    pass
+
+            # Explicitly treat rate limits as a valid-but-busy signal so we don't mark the
+            # key invalid. Caller can surface the warning to the user.
+            if resp.status_code == 429:
+                databases.update_document(
+                    db_id, "user-api-keys", doc["$id"],
+                    {
+                        "isValid": True,
+                        "lastUsed": datetime.now(timezone.utc).isoformat()
+                    }
+                )
+                return {"valid": True, "warning": "Provider rate limited. Try again in a bit."}
+
+            if resp.status_code >= 400:
+                # Parse error message from provider
+                try:
+                    err_data = resp.json()
+                    if isinstance(err_data, list):
+                        err_data = err_data[0]
+                    err_msg = err_data.get("error", {}).get("message", None)
+                except Exception:
+                    err_msg = None
+
+                # Fallback to raw text if JSON parsing didn't provide a message
+                raw_body = resp.text or ''
+                # Sanitize raw_body to avoid leaking keys (truncate to 1000 chars)
+                sanitized_body = raw_body.replace(decrypted_key, '***')[:1000]
+
+                # Compose a helpful error string containing status and either parsed message or raw body
+                error_summary = f"[{resp.status_code}] " + (err_msg or sanitized_body or '<no response body>')
+
+                # Log the provider response (sanitized) for debugging
+                try:
+                    import logging
+                    logging.getLogger('src.api.routes.settings').info(f"Provider test response for {provider}: {sanitized_body}")
+                except Exception:
+                    pass
+
+                # Don't mark as invalid for rate limits (429) — key is still valid
+                if resp.status_code != 429:
+                    databases.update_document(
+                        db_id, "user-api-keys", doc["$id"],
+                        {"isValid": False}
+                    )
+                return {"valid": False, "error": error_summary}
+
             data = resp.json()
             content = data["choices"][0]["message"]["content"].strip().lower()
 

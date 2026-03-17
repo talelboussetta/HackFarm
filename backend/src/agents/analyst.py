@@ -28,7 +28,7 @@ async def analyst(state: ProjectState) -> dict:
     except Exception as e:
         log.error(f"analyst CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "analyst", "error": f"Unexpected: {e}"})
-        return {"errors": state.get("errors", []) + [f"analyst: {type(e).__name__}: {e}"]}
+        return {"errors": [f"analyst: {type(e).__name__}: {e}"]}
 
 
 async def _analyst_impl(state: ProjectState) -> dict:
@@ -105,7 +105,7 @@ async def _analyst_impl(state: ProjectState) -> dict:
                     })
                 except Exception:
                     pass
-            return {"errors": state.get("errors", []) + ["analyst: LLM timed out"]}
+            return {"errors": ["analyst: LLM timed out"]}
         except Exception as e:
             publish(job_id, "agent_failed", {
                 "agent": "analyst", "error": str(e), "retry_count": attempt,
@@ -118,7 +118,7 @@ async def _analyst_impl(state: ProjectState) -> dict:
                     })
                 except Exception:
                     pass
-            return {"errors": state.get("errors", []) + [f"analyst: {e}"]}
+            return {"errors": [f"analyst: {e}"]}
 
     # Step 6: parse JSON safely
     try:
@@ -146,7 +146,7 @@ async def _analyst_impl(state: ProjectState) -> dict:
                 })
             except Exception:
                 pass
-        return {"errors": state.get("errors", []) + [error_msg]}
+        return {"errors": [error_msg]}
 
     # Step 7: extract fields with safe defaults
     project_name = data.get("project_name", "Unnamed Project")
