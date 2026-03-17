@@ -255,8 +255,7 @@ export default function Landing() {
             >{s}</button>
           ))}
         </div>
-        <button onClick={user ? () => navigate('/app') : loginWithGitHub} style={{
-          background: '#000', color: lime, border: `1px solid ${lime}`, borderRadius: 8,
+        <button onClick={user ? () => navigate('/app') : () => setAuthMode('login')} style={{
           padding: '8px 18px', fontSize: 13, fontFamily: outfit, fontWeight: 500, cursor: 'pointer',
           transition: 'background 0.2s, color 0.2s',
         }}
@@ -338,8 +337,7 @@ export default function Landing() {
 
           {/* CTAs */}
           <motion.div {...stagger(3)} style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 48 }}>
-            <button onClick={user ? () => navigate('/app') : loginWithGitHub} style={{
-              background: lime, color: '#000', border: 'none', borderRadius: 12,
+            <button onClick={user ? () => navigate('/app') : () => setAuthMode('signup')} style={{
               padding: '16px 36px', fontSize: 16, fontFamily: outfit, fontWeight: 500, cursor: 'pointer',
               transition: 'transform 0.2s, box-shadow 0.2s',
             }}
@@ -670,7 +668,7 @@ export default function Landing() {
             Your next hackathon project, fully generated, pushed to GitHub, ready to demo.
           </motion.p>
           <motion.div {...inView(2)}>
-            <button onClick={user ? () => navigate('/app') : loginWithGitHub} style={{
+            <button onClick={user ? () => navigate('/app') : () => setAuthMode('signup')} style={{
               background: lime, color: '#000', border: 'none', borderRadius: 16,
               padding: '22px 56px', fontSize: 20, fontFamily: outfit, fontWeight: 500, cursor: 'pointer',
               transition: 'transform 0.2s, box-shadow 0.2s',
