@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-import asyncio, io, logging, re, zipfile
+import asyncio, io, json, logging, re, zipfile
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import PlainTextResponse
 from appwrite.query import Query
@@ -251,6 +251,26 @@ def _get_zip_bytes(job: dict) -> bytes:
     """Download the ZIP from Appwrite Storage for a given job."""
     zip_file_id = job.get("zipFileId")
     if not zip_file_id:
+        try:
+            recent = databases.list_documents(
+                DB,
+                "job-events",
+                [
+                    Query.equal("jobId", job["$id"]),
+                    Query.equal("eventType", "job_complete"),
+                    Query.order_desc("$createdAt"),
+                    Query.limit(1),
+                ],
+            )
+            docs = recent.get("documents", [])
+            if docs:
+                payload = json.loads(docs[0].get("payload") or "{}")
+                zip_file_id = payload.get("zip_file_id")
+                if zip_file_id:
+                    databases.update_document(DB, "jobs", job["$id"], {"zipFileId": zip_file_id})
+        except Exception:
+            zip_file_id = None
+    if not zip_file_id:
         raise HTTPException(404, "ZIP not available — job may still be running")
     try:
         return storage.get_file_download(
@@ -488,6 +508,7 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
       databases.update_document(DB, "jobs", job_id, {
           "status": final_status,
           "githubUrl": result.get("github_url", ""),
+          "zipFileId": result.get("zip_file_id", ""),
           "completedAt": datetime.now(timezone.utc).isoformat(),
           "errorMessage": error_msg,
       })

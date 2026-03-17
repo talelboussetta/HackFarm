@@ -33,6 +33,24 @@ export function useJobStream(jobId) {
           }
         });
       });
+    // Ensure we hydrate completion payload even when event history exceeds replay window
+    databases
+      .listDocuments(dbId, "job-events", [
+        Query.equal("jobId", jobId),
+        Query.equal("eventType", "job_complete"),
+        Query.orderDesc("$createdAt"),
+        Query.limit(1),
+      ])
+      .then((res) => {
+        const latest = res.documents?.[0];
+        if (!latest) return;
+        try {
+          handleEvent(latest.eventType, JSON.parse(latest.payload));
+          lastDocIdRef.current = latest.$id;
+        } catch (e) {
+          // ignore malformed completion payloads
+        }
+      });
 
     // 2. Subscribe to live events via Appwrite Realtime
     unsubRef.current = appwriteClient.subscribe(

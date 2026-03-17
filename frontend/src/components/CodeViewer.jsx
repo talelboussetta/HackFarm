@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Copy, Check, ChevronRight, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAuth } from '../hooks/useAuth'
 import hljs from 'highlight.js/lib/core'
 
 // Register only common languages to keep bundle small
@@ -145,6 +146,7 @@ function TreeNode({ node, depth = 0, selectedFile, onSelect }) {
 }
 
 export default function CodeViewer({ jobId, jobStatus }) {
+  const { getJWT } = useAuth()
   const [files, setFiles] = useState([])
   const [selectedFile, setSelectedFile] = useState(null)
   const [content, setContent] = useState('')
@@ -162,7 +164,21 @@ export default function CodeViewer({ jobId, jobStatus }) {
     const attempt = async () => {
       setLoading(true)
       try {
-        const res = await fetch(`/api/jobs/${jobId}/files`, { credentials: 'include' })
+        const jwt = await getJWT()
+        if (!jwt) {
+          const err = new Error('Session expired')
+          err.code = 401
+          throw err
+        }
+        const res = await fetch(`/api/jobs/${jobId}/files`, {
+          credentials: 'include',
+          headers: { 'X-Appwrite-Session': jwt },
+        })
+        if (res.status === 401) {
+          const err = new Error('Session expired')
+          err.code = 401
+          throw err
+        }
         if (!res.ok) throw new Error('list failed')
         const data = await res.json()
         if (cancelled) return
@@ -172,6 +188,10 @@ export default function CodeViewer({ jobId, jobStatus }) {
           setSelectedFile(data.files[0].path)
         }
       } catch (e) {
+        if (e?.code === 401) {
+          setFileError('Session expired — please log in again')
+          return
+        }
         setFileError('Files not ready yet — retrying...')
         listAttemptsRef.current += 1
         const delay = Math.min(2000 * listAttemptsRef.current, 8000)
@@ -191,19 +211,44 @@ export default function CodeViewer({ jobId, jobStatus }) {
       setContent(contentCache.current[selectedFile])
       return
     }
-    setFileLoading(true)
-    fetch(`/api/jobs/${jobId}/files/${selectedFile}`, { credentials: 'include' })
-      .then(r => r.ok ? r.text() : Promise.reject())
-      .then(text => {
+    let cancelled = false
+    const run = async () => {
+      setFileLoading(true)
+      try {
+        const jwt = await getJWT()
+        if (!jwt) {
+          const err = new Error('Session expired')
+          err.code = 401
+          throw err
+        }
+        const r = await fetch(`/api/jobs/${jobId}/files/${selectedFile}`, {
+          credentials: 'include',
+          headers: { 'X-Appwrite-Session': jwt },
+        })
+        if (r.status === 401) {
+          const err = new Error('Session expired')
+          err.code = 401
+          throw err
+        }
+        if (!r.ok) throw new Error('content failed')
+        const text = await r.text()
+        if (cancelled) return
         contentCache.current[selectedFile] = text
         setContent(text)
-      })
-      .catch(() => {
+      } catch (e) {
+        if (e?.code === 401) {
+          setFileError('Session expired — please log in again')
+          return
+        }
         setContent('// Failed to load file content')
         toast.error('Failed to load file')
-      })
-      .finally(() => setFileLoading(false))
-  }, [selectedFile, jobId])
+      } finally {
+        if (!cancelled) setFileLoading(false)
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [selectedFile, jobId, getJWT])
 
   // Highlight code
   useEffect(() => {
