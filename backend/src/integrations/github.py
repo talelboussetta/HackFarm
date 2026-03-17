@@ -59,6 +59,24 @@ class GitHubClient:
                     "Cannot create repo — GitHub token lacks 'repo' scope. "
                     "Re-authenticate with GitHub to grant repository access."
                 )
+            if resp.status_code == 422:
+                detail = ""
+                try:
+                    payload = resp.json()
+                    errors = payload.get("errors") or []
+                    messages = [e.get("message", "") for e in errors if isinstance(e, dict)]
+                    detail = " ".join(m for m in messages if m).lower()
+                except Exception:
+                    detail = ""
+                if "already exists" in detail:
+                    raise ValueError(
+                        f"Repository '{name}' already exists on your GitHub account. "
+                        "Choose a different repo name and retry."
+                    )
+                raise ValueError(
+                    "GitHub rejected repository creation (422). "
+                    "Check repository name/visibility and try again."
+                )
             resp.raise_for_status()
             data = resp.json()
             logger.info(f"[GitHub] Created repo: {data['full_name']}")
