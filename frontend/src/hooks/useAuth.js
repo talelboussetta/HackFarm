@@ -9,18 +9,7 @@ let _jwtCreatedAt = 0;
 let _jwtInflight = null;
 const JWT_TTL_MS = 10 * 60 * 1000;
 
-// ── Session persistence: use sessionStorage so login is required each new tab/page load ──
-const SESSION_KEY = "hf-tab-auth";
-
-function _hasTabSession() {
-  try { return !!sessionStorage.getItem(SESSION_KEY); } catch { return false; }
-}
-function _setTabSession() {
-  try { sessionStorage.setItem(SESSION_KEY, "1"); } catch {}
-}
-function _clearTabSession() {
-  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
-  // also clear the JWT cache
+function _clearJWTCache() {
   _cachedJWT = null;
   _jwtCreatedAt = 0;
 }
@@ -46,7 +35,7 @@ async function _getOrCreateJWT() {
       const token = r?.jwt;
       if (!token) {
         const session = _getSessionFromStorage();
-        if (!session) throw new Error("createJWT returned empty token and no session in storage");
+        if (!session) throw new Error("No JWT or session available");
         _cachedJWT = session;
       } else {
         _cachedJWT = token;
@@ -59,7 +48,6 @@ async function _getOrCreateJWT() {
       _jwtInflight = null;
       const session = _getSessionFromStorage();
       if (session) {
-        log.warn("createJWT failed, using session token fallback:", e?.message);
         _cachedJWT = session;
         _jwtCreatedAt = Date.now();
         return _cachedJWT;
@@ -77,29 +65,13 @@ export function useAuth() {
   const [error, setError] = useState(null);
 
   const fetchUser = useCallback(async () => {
-    // If this is a fresh page load (no sessionStorage marker), don't auto-login.
-    // The user must explicitly click login — prevents stale sessions causing 401s.
-    if (!_hasTabSession()) {
-      // Check if we just came back from a GitHub OAuth flow
-      const oauthPending = localStorage.getItem("hf-oauth-pending");
-      if (oauthPending) {
-        localStorage.removeItem("hf-oauth-pending");
-        _setTabSession();
-        // fall through to account.get() below
-      } else {
-        // No tab session — require explicit login, don't touch the Appwrite session
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-    }
     try {
       const u = await account.get();
       setUser(u);
       setError(null);
     } catch {
       setUser(null);
-      _clearTabSession();
+      _clearJWTCache();
     } finally {
       setLoading(false);
     }
@@ -110,10 +82,7 @@ export function useAuth() {
   }, [fetchUser]);
 
   const loginWithGitHub = () => {
-    // Clear any cached JWT so we always get a fresh one after login
-    _clearTabSession();
-    // Mark that we're about to do OAuth so fetchUser accepts the session on return
-    localStorage.setItem("hf-oauth-pending", "1");
+    _clearJWTCache();
     account.createOAuth2Session(
       OAuthProvider.Github,
       window.location.origin + "/app",
@@ -124,11 +93,9 @@ export function useAuth() {
 
   const loginWithEmail = async (email, password) => {
     setError(null);
-    // Delete any existing session so we always start with a fresh one
-    try { await account.deleteSession("current"); } catch {}
     try {
       await account.createEmailPasswordSession(email, password);
-      _setTabSession();
+      _clearJWTCache();
       await fetchUser();
     } catch (e) {
       setError(e.message || "Login failed");
@@ -138,11 +105,10 @@ export function useAuth() {
 
   const signupWithEmail = async (email, password, name) => {
     setError(null);
-    try { await account.deleteSession("current"); } catch {}
     try {
       await account.create("unique()", email, password, name);
       await account.createEmailPasswordSession(email, password);
-      _setTabSession();
+      _clearJWTCache();
       await fetchUser();
     } catch (e) {
       setError(e.message || "Signup failed");
@@ -151,7 +117,7 @@ export function useAuth() {
   };
 
   const logout = async () => {
-    _clearTabSession();
+    _clearJWTCache();
     try {
       await account.deleteSession("current");
     } catch {
