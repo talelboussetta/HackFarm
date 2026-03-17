@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -6,7 +6,7 @@ import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight, Tras
 import { useJobStream } from '../hooks/useJobStream'
 import { useAuth } from '../hooks/useAuth'
 import { api } from '../lib/api'
-import EmptyState from '../components/EmptyState'
+import CodeViewer from '../components/CodeViewer'
 import AgentPipelineGraph from '../components/AgentPipelineGraph'
 import AgentDrawer from '../components/AgentDrawer'
 import Lottie from 'lottie-react'
@@ -106,7 +106,6 @@ export default function Job() {
   const { getJWT } = useAuth()
 
   const [selectedNode, setSelectedNode] = useState(null)
-  const [selectedFile, setSelectedFile] = useState(null)
   const [rightTab, setRightTab] = useState('code')
   const [confettiFired, setConfettiFired] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -137,23 +136,6 @@ export default function Job() {
   const agentsDone = AGENT_KEYS.filter(k => agentStates[k]?.status === 'done').length
   const totalFiles = AGENT_KEYS.reduce((n, k) => n + (agentStates[k]?.files?.length || 0), 0)
   const validationScore = agentStates.validator?.status === 'done' ? (result?.validation_score || '—') : '—'
-
-  // Collect all generated file paths
-  const fileList = useMemo(() => {
-    const files = []
-    AGENT_KEYS.forEach(k => { agentStates[k]?.files?.forEach(f => { if (!files.includes(f)) files.push(f) }) })
-    return files.sort()
-  }, [agentStates])
-
-  const groupedFiles = useMemo(() => {
-    const groups = { frontend: [], backend: [], config: [] }
-    fileList.forEach(f => {
-      if (f.startsWith('frontend/')) groups.frontend.push(f)
-      else if (f.startsWith('backend/')) groups.backend.push(f)
-      else groups.config.push(f)
-    })
-    return groups
-  }, [fileList])
 
   const mermaidChart = businessContent?.architecture_mermaid || null
   const readmeContent = businessContent?.readme_content || null
@@ -328,61 +310,8 @@ export default function Job() {
 
             {/* Code tab */}
             {rightTab === 'code' && (
-              <div className="flex h-full overflow-hidden">
-                {/* File tree */}
-                <div className="w-[30%] border-r border-white/10 overflow-y-auto p-2 space-y-2">
-                  {fileList.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                      <div className="text-white/15 mb-2">
-                        <svg width="40" height="40" viewBox="0 0 120 120" fill="none"><path d="M35 25H70L85 40V95H35V25Z" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.5" /><path d="M70 25V40H85" stroke="currentColor" strokeWidth="1.5" opacity="0.5" /></svg>
-                      </div>
-                      <p className="text-xs text-white/30">Files will appear here once agents finish generating code</p>
-                    </div>
-                  ) : (
-                    <>
-                      {groupedFiles.frontend.length > 0 && (
-                        <FileGroup label="Frontend" color="text-cyan-400" files={groupedFiles.frontend}
-                          selectedFile={selectedFile} onSelect={setSelectedFile} />
-                      )}
-                      {groupedFiles.backend.length > 0 && (
-                        <FileGroup label="Backend" color="text-amber-400" files={groupedFiles.backend}
-                          selectedFile={selectedFile} onSelect={setSelectedFile} />
-                      )}
-                      {groupedFiles.config.length > 0 && (
-                        <FileGroup label="Config" color="text-white/40" files={groupedFiles.config}
-                          selectedFile={selectedFile} onSelect={setSelectedFile} />
-                      )}
-                    </>
-                  )}
-                </div>
-                {/* Code viewer */}
-                <div className="w-[70%] overflow-auto">
-                  {selectedFile ? (
-                    jobStatus === 'complete' ? (
-                      <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-6">
-                        <div className="text-white/30 text-sm">
-                          <p className="text-white/50 font-medium mb-1">{selectedFile.split('/').pop()}</p>
-                          <p>File preview available after download</p>
-                        </div>
-                        {zipFileId && (
-                          <button onClick={handleDownload}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg text-sm hover:bg-blue-500/30 transition-colors">
-                            <Download size={14} /> Download ZIP
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-full gap-3 text-center p-6">
-                        <Loader2 size={20} className="text-blue-400 animate-spin" />
-                        <p className="text-white/30 text-sm">Generating files...</p>
-                      </div>
-                    )
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-white/20 text-sm">
-                      Select a file to view
-                    </div>
-                  )}
-                </div>
+              <div className="h-full">
+                <CodeViewer jobId={id} jobStatus={jobStatus} />
               </div>
             )}
 
@@ -447,33 +376,6 @@ export default function Job() {
         allEvents={[]}
         onClose={() => setSelectedNode(null)}
       />
-    </div>
-  )
-}
-
-function FileGroup({ label, color, files, selectedFile, onSelect }) {
-  const [open, setOpen] = useState(true)
-  return (
-    <div>
-      <button onClick={() => setOpen(!open)} className={`flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider w-full px-1 py-1 ${color}`}>
-        <ChevronRight size={10} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
-        📁 {label} ({files.length})
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden">
-            {files.map(f => (
-              <button key={f} onClick={() => onSelect(f)}
-                className={`w-full text-left text-[11px] font-mono px-3 py-0.5 rounded truncate transition-colors ${
-                  selectedFile === f ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:text-white hover:bg-white/5'
-                }`}>
-                {f.split('/').pop()}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

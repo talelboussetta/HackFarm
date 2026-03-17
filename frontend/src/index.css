@@ -153,6 +153,28 @@ pre[class*="language-"] {
   line-height: 1.6 !important;
 }
 
+/* ── highlight.js dark theme (GitHub Dark Dimmed) ── */
+.hljs {
+  color: #adbac7;
+  background: transparent;
+}
+.hljs-keyword, .hljs-selector-tag { color: #f47067; }
+.hljs-literal, .hljs-number, .hljs-built_in { color: #6cb6ff; }
+.hljs-string, .hljs-attr { color: #96d0ff; }
+.hljs-title, .hljs-section, .hljs-title.function_ { color: #dcbdfb; }
+.hljs-comment, .hljs-quote { color: #768390; font-style: italic; }
+.hljs-variable, .hljs-template-variable { color: #f69d50; }
+.hljs-tag { color: #8ddb8c; }
+.hljs-name, .hljs-selector-id, .hljs-selector-class { color: #8ddb8c; }
+.hljs-attribute { color: #6cb6ff; }
+.hljs-regexp, .hljs-link { color: #96d0ff; }
+.hljs-meta { color: #768390; }
+.hljs-type, .hljs-params { color: #f69d50; }
+.hljs-deletion { color: #f47067; background: rgba(244,112,103,0.1); }
+.hljs-addition { color: #8ddb8c; background: rgba(141,219,140,0.1); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }
+
 /* ── Prose (markdown) dark styles ── */
 .prose-hackfarmer {
   --tw-prose-body: rgba(255, 255, 255, 0.75);
@@ -272,6 +294,18 @@ body::after {
   animation: border-flow 3s ease infinite;
   padding: 1px;
   border-radius: 16px;
+}
+
+/* ── Accessibility: focus rings ── */
+*:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
 }
 
 /* ── Loader spin utility (for inline style usage) ── */

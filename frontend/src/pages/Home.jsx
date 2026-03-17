@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { Upload, MessageSquare, Zap, X, Github, Lock, Globe, AlertTriangle, Loader2 } from 'lucide-react'
+import { Upload, MessageSquare, Zap, X, Github, Lock, Globe, AlertTriangle, Loader2, BarChart3, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useJobSubmit } from '../hooks/useJobSubmit'
 import Button from '../components/Button'
@@ -32,6 +32,15 @@ export default function Home() {
   const [retentionDays, setRetentionDays] = useState(30)
   const [localError, setLocalError] = useState(null)
   const [fieldErrors, setFieldErrors] = useState({})
+  const [stats, setStats] = useState(null)
+
+  // Fetch user stats for dashboard
+  useEffect(() => {
+    fetch('/api/jobs-stats', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => data && setStats(data))
+      .catch(() => {})
+  }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
@@ -128,6 +137,33 @@ export default function Home() {
           </motion.p>
         </div>
       </section>
+
+      {/* Dashboard Stats */}
+      {stats && stats.total_projects > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-3"
+        >
+          {[
+            { label: 'Projects', value: stats.total_projects, icon: BarChart3, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+            { label: 'Completed', value: stats.completed, icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10' },
+            { label: 'Failed', value: stats.failed, icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/10' },
+            { label: 'Success Rate', value: `${stats.success_rate}%`, icon: Zap, color: 'text-amber-400', bg: 'bg-amber-400/10' },
+          ].map(s => (
+            <div key={s.label} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+              <div className={`p-2 rounded-lg ${s.bg}`}>
+                <s.icon size={16} className={s.color} />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-white">{s.value}</div>
+                <div className="text-[10px] text-white/30 uppercase tracking-wider">{s.label}</div>
+              </div>
+            </div>
+          ))}
+        </motion.section>
+      )}
 
       {/* Tabs */}
       <div className="space-y-6">

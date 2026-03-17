@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
-import asyncio, logging, re
+import asyncio, io, logging, re, zipfile
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
+from fastapi.responses import PlainTextResponse
 from appwrite.query import Query
 from appwrite.id import ID
 from src.api.dependencies import get_current_user
@@ -239,6 +240,96 @@ async def get_job(
             }
             for r in agent_runs["documents"]
         ],
+    }
+
+
+# ── GET /api/jobs/{job_id}/files ──────────────────────────────
+
+def _get_zip_bytes(job: dict) -> bytes:
+    """Download the ZIP from Appwrite Storage for a given job."""
+    zip_file_id = job.get("zipFileId")
+    if not zip_file_id:
+        raise HTTPException(404, "ZIP not available — job may still be running")
+    try:
+        return storage.get_file_download(
+            bucket_id=settings.APPWRITE_ZIP_BUCKET_ID,
+            file_id=zip_file_id,
+        )
+    except Exception:
+        raise HTTPException(500, "Failed to retrieve ZIP file")
+
+
+@router.get("/{job_id}/files")
+async def list_files(job_id: str, user: dict = Depends(get_current_user)):
+    """Return the list of files inside the generated ZIP with metadata."""
+    try:
+        job = databases.get_document(DB, "jobs", job_id)
+    except Exception:
+        raise HTTPException(404, "Job not found")
+    if job["userId"] != user["id"]:
+        raise HTTPException(403, "Not your job")
+
+    raw = _get_zip_bytes(job)
+    with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
+        files = []
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            files.append({
+                "path": info.filename,
+                "size": info.file_size,
+            })
+    return {"files": sorted(files, key=lambda f: f["path"])}
+
+
+@router.get("/{job_id}/files/{filepath:path}")
+async def get_file_content(
+    job_id: str,
+    filepath: str,
+    user: dict = Depends(get_current_user),
+):
+    """Return the content of a single file from the generated ZIP."""
+    try:
+        job = databases.get_document(DB, "jobs", job_id)
+    except Exception:
+        raise HTTPException(404, "Job not found")
+    if job["userId"] != user["id"]:
+        raise HTTPException(403, "Not your job")
+
+    raw = _get_zip_bytes(job)
+    with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
+        if filepath not in zf.namelist():
+            raise HTTPException(404, f"File not found: {filepath}")
+        content = zf.read(filepath).decode("utf-8", errors="replace")
+    return PlainTextResponse(content)
+
+
+# ── GET /api/jobs/stats ───────────────────────────────────────
+
+@router.get("-stats")
+async def get_user_stats(user: dict = Depends(get_current_user)):
+    """Return aggregate stats for the current user's dashboard."""
+    user_id = user["id"]
+    try:
+        all_jobs = databases.list_documents(
+            DB, "jobs",
+            [Query.equal("userId", user_id), Query.limit(500)],
+        )
+    except Exception:
+        raise HTTPException(500, "Failed to fetch stats")
+
+    docs = all_jobs.get("documents", [])
+    total = len(docs)
+    completed = sum(1 for d in docs if d.get("status") == "completed")
+    failed = sum(1 for d in docs if d.get("status") == "failed")
+    running = sum(1 for d in docs if d.get("status") == "running")
+
+    return {
+        "total_projects": total,
+        "completed": completed,
+        "failed": failed,
+        "running": running,
+        "success_rate": round(completed / total * 100) if total else 0,
     }
 
 

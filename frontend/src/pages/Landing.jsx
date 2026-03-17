@@ -597,6 +597,52 @@ export default function Landing() {
         </motion.div>
       </section>
 
+      {/* ═══════════════ SECTION 12.5: HOW IT WORKS ═══════════════ */}
+      <section style={{ padding: '120px 0', position: 'relative' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 5vw' }}>
+          <motion.h2 {...inView(0)} style={{ fontFamily: syne, fontWeight: 800, fontSize: 'clamp(36px, 4.5vw, 56px)', textAlign: 'center', marginBottom: 16, letterSpacing: '-0.02em' }}>
+            How it works
+          </motion.h2>
+          <motion.p {...inView(1)} style={{ fontFamily: outfit, fontSize: 18, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 64 }}>
+            Three steps. Under two minutes. Zero config.
+          </motion.p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {[
+              { step: '01', title: 'Describe your idea', desc: 'Type a prompt or upload a PDF/DOCX spec. Our analyst agent extracts features, constraints, and scope automatically.', accent: electric },
+              { step: '02', title: 'Watch agents build', desc: 'Seven specialized AI agents work in parallel — designing architecture, writing frontend & backend code, creating pitch decks, and validating everything.', accent: lime },
+              { step: '03', title: 'Ship it', desc: 'Your complete project is pushed to GitHub with full code, README, architecture diagrams, and a pitch deck. Download the ZIP or open it directly.', accent: gold },
+            ].map((s, i) => (
+              <motion.div key={i} {...inView(i * 0.15)} style={{ display: 'flex', gap: 32, padding: '40px 0', borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none', alignItems: 'flex-start' }}>
+                <div style={{ fontFamily: mono, fontSize: 48, fontWeight: 800, color: s.accent, opacity: 0.3, lineHeight: 1, flexShrink: 0, minWidth: 80 }}>{s.step}</div>
+                <div>
+                  <h3 style={{ fontFamily: syne, fontWeight: 700, fontSize: 24, marginBottom: 8 }}>{s.title}</h3>
+                  <p style={{ fontFamily: outfit, fontSize: 16, color: 'rgba(255,255,255,0.45)', lineHeight: 1.7 }}>{s.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════ SECTION 12.7: FAQ ═══════════════ */}
+      <section style={{ padding: '120px 0', position: 'relative' }}>
+        <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 5vw' }}>
+          <motion.h2 {...inView(0)} style={{ fontFamily: syne, fontWeight: 800, fontSize: 'clamp(36px, 4.5vw, 56px)', textAlign: 'center', marginBottom: 56, letterSpacing: '-0.02em' }}>
+            FAQ
+          </motion.h2>
+          {[
+            { q: 'Is it free?', a: 'Yes — HackFarmer is free during beta. You bring your own LLM API keys (Gemini, Groq, or OpenRouter), so you only pay your provider\'s rates.' },
+            { q: 'What LLM providers are supported?', a: 'We support Google Gemini, Groq, and OpenRouter. You can add multiple keys and we\'ll automatically fallback between them if one fails.' },
+            { q: 'Is my code private?', a: 'Absolutely. Your API keys are Fernet-encrypted at rest. Generated code is pushed to your own GitHub account (public or private, your choice). We never store your source code on our servers.' },
+            { q: 'What kinds of projects can it generate?', a: 'Full-stack web apps with a React + Vite frontend and FastAPI backend. Think: dashboards, SaaS apps, hackathon projects, MVPs, internal tools — anything describable in a spec.' },
+            { q: 'How long does generation take?', a: 'Typically 60–90 seconds. Our agents run in parallel (frontend, backend, and business docs all generate simultaneously), so it\'s much faster than sequential generation.' },
+            { q: 'Can I edit the generated code?', a: 'Yes — the code is pushed to your GitHub repo, so you can clone it and modify anything. You can also preview all files directly in HackFarmer\'s built-in code viewer with syntax highlighting.' },
+          ].map((faq, i) => (
+            <FaqItem key={i} q={faq.q} a={faq.a} i={i} />
+          ))}
+        </div>
+      </section>
+
       {/* ═══════════════ SECTION 13: FINAL CTA ═══════════════ */}
       <section id="start" style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
@@ -645,10 +691,16 @@ export default function Landing() {
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
           borderTop: '1px solid rgba(255,255,255,0.06)',
-          padding: '24px 32px', textAlign: 'center',
+          padding: '24px 32px',
           fontFamily: outfit, fontSize: 13, color: 'rgba(255,255,255,0.2)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
         }}>
-          HackFarmer © 2025 &nbsp;|&nbsp; Built with LangGraph · Appwrite · FastAPI · React
+          <span>HackFarmer © {new Date().getFullYear()}</span>
+          <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+            <a href="https://github.com/talelboussetta/HackFarm" target="_blank" rel="noreferrer" style={{ color: 'rgba(255,255,255,0.3)', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.3)'}>GitHub</a>
+            <span style={{ color: 'rgba(255,255,255,0.1)' }}>·</span>
+            <span>Built with LangGraph · Appwrite · FastAPI · React</span>
+          </div>
         </div>
       </section>
 
@@ -787,4 +839,41 @@ function archBox(accent) {
     background: 'rgba(255,255,255,0.03)', border: `1px solid ${accent}30`,
     minWidth: 180,
   }
+}
+
+function FaqItem({ q, a, i }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.4, delay: i * 0.05 }}
+      style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+    >
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '24px 0', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600, fontSize: 18, color: '#fff' }}>{q}</span>
+        <span style={{ fontSize: 24, color: 'rgba(255,255,255,0.3)', transform: open ? 'rotate(45deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0, marginLeft: 16 }}>+</span>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 15, color: 'rgba(255,255,255,0.45)', lineHeight: 1.7, paddingBottom: 24 }}>{a}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
 }
