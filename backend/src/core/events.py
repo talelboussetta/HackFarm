@@ -10,8 +10,38 @@ log = logging.getLogger(__name__)
 
 VALID_EVENT_TYPES = {
     "agent_start", "agent_thinking", "agent_done", "agent_failed",
-    "job_complete", "job_failed", "job_queued", "heartbeat"
+    "job_complete", "job_failed", "job_queued", "job_refining", "heartbeat"
 }
+
+def _compact_payload(payload: dict, max_len: int = 4500) -> str:
+    raw = json.dumps(payload)
+    if len(raw) <= max_len:
+        return raw
+
+    compact = dict(payload)
+
+    if isinstance(compact.get("readme_content"), str):
+        compact["readme_content"] = compact["readme_content"][:1200] + "…"
+    if isinstance(compact.get("architecture_mermaid"), str):
+        compact["architecture_mermaid"] = compact["architecture_mermaid"][:1800]
+    if isinstance(compact.get("pitch_slides"), list):
+        compact["pitch_slides"] = compact["pitch_slides"][:3]
+    if isinstance(compact.get("generated_files"), dict):
+        compact["generated_files"] = list(compact["generated_files"].keys())[:30]
+
+    compact["_truncated"] = True
+    trimmed = json.dumps(compact)
+    if len(trimmed) <= max_len:
+        return trimmed
+    # Last resort: keep only compact metadata and essential identifiers.
+    fallback = {
+        "agent": payload.get("agent"),
+        "summary": payload.get("summary") or payload.get("message"),
+        "zip_file_id": payload.get("zip_file_id"),
+        "github_url": payload.get("github_url"),
+        "_truncated": True,
+    }
+    return json.dumps(fallback)
 
 def publish(job_id: str, event_type: str, payload: dict) -> None:
     """
@@ -32,7 +62,7 @@ def publish(job_id: str, event_type: str, payload: dict) -> None:
             data={
                 "jobId": job_id,
                 "eventType": event_type,
-                "payload": json.dumps(payload),
+                "payload": _compact_payload(payload),
             }
         )
     except Exception as e:

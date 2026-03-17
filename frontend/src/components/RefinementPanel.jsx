@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Sparkles, MessageCircle, Loader2, ChevronUp, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import Button from './Button'
+import { useAuth } from '../hooks/useAuth'
 
 const SUGGESTIONS = [
   'Add dark/light mode toggle',
@@ -14,6 +15,7 @@ const SUGGESTIONS = [
 ]
 
 export default function RefinementPanel({ jobId, jobStatus, onRefineStart }) {
+  const { getJWT } = useAuth()
   const [open, setOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [messages, setMessages] = useState([])
@@ -30,10 +32,15 @@ export default function RefinementPanel({ jobId, jobStatus, onRefineStart }) {
     setLoading(true)
 
     try {
+      const jwt = await getJWT()
+      if (!jwt) throw new Error('Session expired — please log in again')
       const res = await fetch(`/api/jobs/${jobId}/refine`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Appwrite-Session': jwt,
+        },
         body: JSON.stringify({ feedback: userMsg }),
       })
 
