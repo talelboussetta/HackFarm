@@ -198,7 +198,7 @@ class LLMRouter:
                         f"provider={name} in={input_tokens} out={output_tokens}"
                     )
 
-                    # Validate JSON responses — retry once on parse failure
+                    # Validate JSON responses — if invalid after a retry, fail this provider so we fall back
                     if response_format == "json":
                         try:
                             json.loads(result)
@@ -227,14 +227,16 @@ class LLMRouter:
                                         retry_result = re.sub(r'^```\w*\s*\n?', '', retry_result)
                                         retry_result = re.sub(r'\n?```\s*$', '', retry_result)
                                         retry_result = retry_result.strip()
-                                    json.loads(retry_result)  # validate
+                                    json.loads(retry_result)  # validate or raise
                                     result = retry_result
                                     r_usage = getattr(retry_response, "usage", None)
                                     self._total_input_tokens += getattr(r_usage, "prompt_tokens", 0) or 0
                                     self._total_output_tokens += getattr(r_usage, "completion_tokens", 0) or 0
                                     self._call_count += 1
                             except Exception:
-                                pass  # let the agent handle the invalid JSON
+                                # Treat as provider failure to trigger fallback
+                                logger.warning(f"[LLM] {name} JSON retry failed for agent={agent_name}")
+                                raise ValueError("invalid json from provider")
 
                     return result
 
@@ -256,6 +258,9 @@ class LLMRouter:
                     elif "401" in msg or "auth" in msg or "api key" in msg or "invalid" in msg:
                         logger.error(f"[LLM] {name} auth error (bad API key?): {e}")
                         break  # skip retries, this provider's key is bad
+                    elif "invalid json from provider" in msg:
+                        logger.warning(f"[LLM] {name} invalid JSON, trying next provider")
+                        break
                     else:
                         logger.error(f"[LLM] {name} failed: {type(e).__name__}: {e}")
                         break  # unknown error, move to next provider

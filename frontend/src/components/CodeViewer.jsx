@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
-import { Copy, Check, Download, ChevronRight, ChevronDown, File, Folder } from 'lucide-react'
+import { Copy, Check, ChevronRight, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import hljs from 'highlight.js/lib/core'
 
@@ -107,7 +106,7 @@ function TreeNode({ node, depth = 0, selectedFile, onSelect }) {
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
         >
           {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          <Folder size={12} className="text-blue-400/60" />
+          <span className="text-blue-400/60">📁</span>
           <span className="truncate">{node.name}</span>
         </button>
       )}
@@ -151,25 +150,38 @@ export default function CodeViewer({ jobId, jobStatus }) {
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [fileLoading, setFileLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [fileError, setFileError] = useState(null)
   const contentCache = useRef({})
   const codeRef = useRef(null)
+  const listAttemptsRef = useRef(0)
 
   // Fetch file list when job is complete
   useEffect(() => {
     if (jobStatus !== 'complete' && jobStatus !== 'completed') return
-    setLoading(true)
-    fetch(`/api/jobs/${jobId}/files`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => {
+    let cancelled = false
+    const attempt = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/files`, { credentials: 'include' })
+        if (!res.ok) throw new Error('list failed')
+        const data = await res.json()
+        if (cancelled) return
         setFiles(data.files || [])
-        // Auto-select first file
+        setFileError(null)
         if (data.files?.length > 0) {
           setSelectedFile(data.files[0].path)
         }
-      })
-      .catch(() => toast.error('Failed to load file list'))
-      .finally(() => setLoading(false))
+      } catch (e) {
+        setFileError('Files not ready yet — retrying...')
+        listAttemptsRef.current += 1
+        const delay = Math.min(2000 * listAttemptsRef.current, 8000)
+        setTimeout(() => attempt(), delay)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    attempt()
+    return () => { cancelled = true }
   }, [jobId, jobStatus])
 
   // Fetch file content when selection changes
@@ -216,6 +228,7 @@ export default function CodeViewer({ jobId, jobStatus }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const [copied, setCopied] = useState(false)
   const tree = buildTree(files)
   const lines = content.split('\n')
 
@@ -232,6 +245,15 @@ export default function CodeViewer({ jobId, jobStatus }) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-5 h-5 border-2 border-blue-400/40 border-t-blue-400 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (fileError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-white/40 text-sm gap-3">
+        <div className="w-5 h-5 border-2 border-blue-400/40 border-t-blue-400 rounded-full animate-spin" />
+        <p>{fileError}</p>
       </div>
     )
   }
