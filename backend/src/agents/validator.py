@@ -150,7 +150,7 @@ async def validator(state: ProjectState) -> dict:
     except Exception as e:
         log.error(f"validator CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "validator", "error": f"Unexpected: {e}"})
-        return {"errors": state.get("errors", []) + [f"validator: {type(e).__name__}: {e}"]}
+        return {"errors": [f"validator: {type(e).__name__}: {e}"]}
 
 
 async def _validator_impl(state: ProjectState) -> dict:

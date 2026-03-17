@@ -27,7 +27,7 @@ async def frontend_agent(state: ProjectState) -> dict:
     except Exception as e:
         log.error(f"frontend_agent CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "frontend_agent", "error": f"Unexpected: {e}"})
-        return {"errors": state.get("errors", []) + [f"frontend_agent: {type(e).__name__}: {e}"]}
+        return {"errors": [f"frontend_agent: {type(e).__name__}: {e}"]}
 
 
 async def _frontend_agent_impl(state: ProjectState) -> dict:
@@ -45,7 +45,7 @@ async def _frontend_agent_impl(state: ProjectState) -> dict:
             "agent": "frontend_agent",
             "error": "api_contracts missing — architect must run first",
         })
-        return {"errors": state.get("errors", []) + ["frontend_agent: api_contracts missing"]}
+        return {"errors": ["frontend_agent: api_contracts missing"]}
 
     # Step 2: create AgentRun document
     agent_run_id = None
@@ -123,7 +123,7 @@ async def _frontend_agent_impl(state: ProjectState) -> dict:
                     })
                 except Exception:
                     pass
-            return {"errors": state.get("errors", []) + ["frontend_agent: LLM timed out"]}
+            return {"errors": ["frontend_agent: LLM timed out"]}
         except Exception as e:
             publish(job_id, "agent_failed", {
                 "agent": "frontend_agent", "error": str(e), "retry_count": attempt,
@@ -136,7 +136,7 @@ async def _frontend_agent_impl(state: ProjectState) -> dict:
                     })
                 except Exception:
                     pass
-            return {"errors": state.get("errors", []) + [f"frontend_agent: {e}"]}
+            return {"errors": [f"frontend_agent: {e}"]}
 
     publish(job_id, "agent_thinking", {
         "agent": "frontend_agent",
@@ -169,7 +169,7 @@ async def _frontend_agent_impl(state: ProjectState) -> dict:
                 })
             except Exception:
                 pass
-        return {"errors": state.get("errors", []) + [error_msg]}
+        return {"errors": [error_msg]}
 
     # Step 7: extract files — only keep frontend/ paths
     raw_files = data.get("files", data)

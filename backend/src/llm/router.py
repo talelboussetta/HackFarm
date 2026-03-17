@@ -228,8 +228,10 @@ class LLMRouter:
                 msg = str(e).lower()
                 if "429" in msg or "rate_limit" in msg or "rate limit" in msg:
                     logger.warning(f"[LLM] {name} rate limited — trying next")
+                elif "401" in msg or "auth" in msg or "api key" in msg or "invalid" in msg:
+                    logger.error(f"[LLM] {name} auth error (bad API key?): {e}")
                 else:
-                    logger.error(f"[LLM] {name} failed: {e}")
+                    logger.error(f"[LLM] {name} failed: {type(e).__name__}: {e}")
                 continue
 
         raise RuntimeError(

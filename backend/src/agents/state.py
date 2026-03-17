@@ -24,7 +24,7 @@ class ProjectState(TypedDict):
     validation_score: int
     validation_issues: List[str]
     retry_count: int
-    errors: List[str]
+    errors: Annotated[List[str], operator.add]  # parallel agents append errors
     status: str
     github_url: Optional[str]
     repo_name: str

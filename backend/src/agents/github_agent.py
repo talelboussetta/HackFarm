@@ -29,7 +29,7 @@ async def github_agent(state: ProjectState) -> dict:
     except Exception as e:
         log.error(f"github_agent CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "github_agent", "error": f"Unexpected: {e}"})
-        return {"errors": state.get("errors", []) + [f"github_agent: {type(e).__name__}: {e}"]}
+        return {"errors": [f"github_agent: {type(e).__name__}: {e}"]}
 
 
 async def _github_agent_impl(state: ProjectState) -> dict:
@@ -93,7 +93,7 @@ async def _github_agent_impl(state: ProjectState) -> dict:
                 })
             except Exception:
                 pass
-        return {"errors": state.get("errors", []) + [error_msg]}
+        return {"errors": [error_msg]}
 
     publish(job_id, "agent_thinking", {
         "agent": "github_agent",
@@ -131,7 +131,7 @@ async def _github_agent_impl(state: ProjectState) -> dict:
                 })
             except Exception:
                 pass
-        return {"errors": state.get("errors", []) + [error_msg]}
+        return {"errors": [error_msg]}
 
     # Step 5: push all generated files + README.md
     all_files = dict(state.get("generated_files", {}))
@@ -165,7 +165,7 @@ async def _github_agent_impl(state: ProjectState) -> dict:
                 pass
         return {
             "github_url": github_url,
-            "errors": state.get("errors", []) + [error_msg],
+            "errors": [error_msg],
         }
 
     publish(job_id, "agent_thinking", {

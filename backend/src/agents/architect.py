@@ -35,7 +35,7 @@ async def architect(state: ProjectState) -> dict:
     except Exception as e:
         log.error(f"architect CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "architect", "error": f"Unexpected: {e}"})
-        return {"errors": state.get("errors", []) + [f"architect: {type(e).__name__}: {e}"]}
+        return {"errors": [f"architect: {type(e).__name__}: {e}"]}
 
 
 async def _architect_impl(state: ProjectState) -> dict:
@@ -120,7 +120,7 @@ async def _architect_impl(state: ProjectState) -> dict:
                     })
                 except Exception:
                     pass
-            return {"errors": state.get("errors", []) + ["architect: LLM timed out"]}
+            return {"errors": ["architect: LLM timed out"]}
         except Exception as e:
             publish(job_id, "agent_failed", {
                 "agent": "architect", "error": str(e), "retry_count": attempt,
@@ -133,7 +133,7 @@ async def _architect_impl(state: ProjectState) -> dict:
                     })
                 except Exception:
                     pass
-            return {"errors": state.get("errors", []) + [f"architect: {e}"]}
+            return {"errors": [f"architect: {e}"]}
 
     # Step 6: parse JSON safely
     try:
@@ -161,7 +161,7 @@ async def _architect_impl(state: ProjectState) -> dict:
                 })
             except Exception:
                 pass
-        return {"errors": state.get("errors", []) + [error_msg]}
+        return {"errors": [error_msg]}
 
     # Step 7: extract fields with safe defaults
     tech_stack = data.get("tech_stack", _DEFAULT_TECH_STACK)

@@ -217,7 +217,7 @@ async def integrator(state: ProjectState) -> dict:
     except Exception as e:
         log.error(f"integrator CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "integrator", "error": f"Unexpected: {e}"})
-        return {"errors": state.get("errors", []) + [f"integrator: {type(e).__name__}: {e}"]}
+        return {"errors": [f"integrator: {type(e).__name__}: {e}"]}
 
 
 async def _integrator_impl(state: ProjectState) -> dict:
