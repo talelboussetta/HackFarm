@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 PROVIDER_CONFIGS = {
     "gemini": {
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "model": "gemini-2.0-flash",
         "priority": 1,
     },
@@ -73,24 +73,31 @@ class LLMRouter:
             if name not in PROVIDER_CONFIGS:
                 continue
             cfg = PROVIDER_CONFIGS[name]
+            client_kwargs = {
+                "api_key": p["decrypted_key"],
+                "base_url": cfg["base_url"],
+                "timeout": 50.0,
+            }
+            if name == "openrouter":
+                client_kwargs["default_headers"] = {
+                    "HTTP-Referer": "https://hackfarmer.dev",
+                    "X-Title": "HackFarmer",
+                }
             self._clients[name] = {
-                "client": AsyncOpenAI(
-                    api_key=p["decrypted_key"],
-                    base_url=cfg["base_url"],
-                    timeout=50.0,
-                ),
+                "client": AsyncOpenAI(**client_kwargs),
                 "model": cfg["model"],
                 "priority": cfg["priority"],
             }
             # Auto-add groq_fast when groq key is present
             if name == "groq":
                 cfg_fast = PROVIDER_CONFIGS["groq_fast"]
+                client_kwargs_fast = {
+                    "api_key": p["decrypted_key"],
+                    "base_url": cfg_fast["base_url"],
+                    "timeout": 50.0,
+                }
                 self._clients["groq_fast"] = {
-                    "client": AsyncOpenAI(
-                        api_key=p["decrypted_key"],
-                        base_url=cfg_fast["base_url"],
-                        timeout=50.0,
-                    ),
+                    "client": AsyncOpenAI(**client_kwargs_fast),
                     "model": cfg_fast["model"],
                     "priority": cfg_fast["priority"],
                 }
@@ -147,16 +154,24 @@ class LLMRouter:
         logger.info(f"[LLM] agent={agent_name} trying providers: {[n for n,_ in ordered]}")
 
         for name, info in ordered:
+            logger.info(f"[LLM] Trying provider={name} agent={agent_name}")
             client = info["client"]
             model = info["model"]
             max_retries = 3
             for attempt in range(max_retries):
                 try:
+                    # Gemini supports structured JSON response via response_format param
+                    create_kwargs = {
+                        "model": model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": temperature,
+                    }
+                    if response_format == "json" and name == "gemini":
+                        create_kwargs["response_format"] = {"type": "json_object"}
+
                     response = await asyncio.wait_for(
                         client.chat.completions.create(
-                            model=model,
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=temperature,
+                            **create_kwargs
                         ),
                         timeout=45.0,
                     )

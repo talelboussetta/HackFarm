@@ -33,7 +33,7 @@ ALLOWED_PROVIDERS = {"gemini", "groq", "openrouter"}
 # Provider → (base_url, model, header_builder)
 PROVIDER_CONFIG = {
     "gemini": {
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "model": "gemini-2.0-flash",
     },
     "groq": {
@@ -43,6 +43,10 @@ PROVIDER_CONFIG = {
     "openrouter": {
         "base_url": "https://openrouter.ai/api/v1",
         "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "extra_headers": {
+            "HTTP-Referer": "https://hackfarmer.dev",
+            "X-Title": "HackFarmer",
+        },
     },
 }
 
@@ -195,18 +199,46 @@ async def test_key(
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
+            headers = {
+                "Authorization": f"Bearer {decrypted_key}",
+                "Content-Type": "application/json",
+            }
+            # Merge provider-specific extra headers (e.g., OpenRouter requires Referer/X-Title)
+            headers.update(cfg.get("extra_headers", {}))
+
+            url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
+
             resp = await client.post(
-                f"{cfg['base_url'].rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {decrypted_key}",
-                    "Content-Type": "application/json",
-                },
+                url,
+                headers=headers,
                 json={
                     "model": cfg["model"],
                     "messages": [{"role": "user", "content": "Reply with the single word: ok"}],
                     "max_tokens": 10,
                 },
             )
+
+            # Some Gemini API setups expect the API key as a query param (?key=) instead of
+            # an Authorization header. If the initial request fails for Gemini, retry with
+            # params and without the Authorization header.
+            if resp.status_code >= 400 and provider == "gemini":
+                try:
+                    alt_headers = {"Content-Type": "application/json"}
+                    alt_headers.update(cfg.get("extra_headers", {}))
+                    alt_resp = await client.post(
+                        url,
+                        headers=alt_headers,
+                        params={"key": decrypted_key},
+                        json={
+                            "model": cfg["model"],
+                            "messages": [{"role": "user", "content": "Reply with the single word: ok"}],
+                            "max_tokens": 10,
+                        },
+                    )
+                    # Use alt_resp if it provides more information
+                    resp = alt_resp
+                except Exception:
+                    pass
             if resp.status_code >= 400:
                 # Parse error message from provider
                 try:
