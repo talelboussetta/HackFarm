@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
+import EmptyState from '../components/EmptyState'
 import { 
   Settings as SettingsIcon, 
   Key, 
@@ -178,15 +179,12 @@ export default function Settings() {
 
         <AnimatePresence>
           {noKeysConfigured && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex items-center gap-3 p-4 rounded-xl bg-amber-400/10 border border-amber-400/20 text-amber-400"
-            >
-              <AlertTriangle size={18} />
-              <span className="text-sm font-medium">Add at least one API key to generate projects</span>
-            </motion.div>
+            <EmptyState
+              icon="keys"
+              title="No API keys configured"
+              description="Add at least one LLM provider key to start generating projects. We support Gemini, Groq, and OpenRouter."
+              className="py-8 bg-white/[0.02] rounded-xl border border-dashed border-white/10"
+            />
           )}
         </AnimatePresence>
 

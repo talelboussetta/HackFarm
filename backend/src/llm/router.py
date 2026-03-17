@@ -61,6 +61,9 @@ class LLMRouter:
             raise ValueError("No LLM providers available")
 
         self._clients: dict[str, dict] = {}
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
+        self._call_count = 0
 
         for p in providers:
             name = p["provider"]
@@ -157,9 +160,18 @@ class LLMRouter:
                     # Remove closing fence
                     result = re.sub(r'\n?```\s*$', '', result)
                     result = result.strip()
+
+                # Track token usage from API response
+                usage = getattr(response, "usage", None)
+                input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                output_tokens = getattr(usage, "completion_tokens", 0) or 0
+                self._total_input_tokens += input_tokens
+                self._total_output_tokens += output_tokens
+                self._call_count += 1
+
                 logger.info(
                     f"[LLM] agent={agent_name or '?'} "
-                    f"provider={name} tokens≈{len(prompt)//4}"
+                    f"provider={name} in={input_tokens} out={output_tokens}"
                 )
                 return result
 
@@ -177,3 +189,13 @@ class LLMRouter:
         raise RuntimeError(
             f"All LLM providers exhausted for agent={agent_name}"
         )
+
+    @property
+    def token_usage(self) -> dict:
+        """Return accumulated token usage stats."""
+        return {
+            "input_tokens": self._total_input_tokens,
+            "output_tokens": self._total_output_tokens,
+            "total_tokens": self._total_input_tokens + self._total_output_tokens,
+            "llm_calls": self._call_count,
+        }

@@ -6,6 +6,7 @@ import { Github, Download, Copy, Check, Loader2, AlertCircle, ChevronRight, Tras
 import { useJobStream } from '../hooks/useJobStream'
 import { useAuth } from '../hooks/useAuth'
 import { api } from '../lib/api'
+import EmptyState from '../components/EmptyState'
 import AgentPipelineGraph from '../components/AgentPipelineGraph'
 import AgentDrawer from '../components/AgentDrawer'
 import Lottie from 'lottie-react'
@@ -331,7 +332,12 @@ export default function Job() {
                 {/* File tree */}
                 <div className="w-[30%] border-r border-white/10 overflow-y-auto p-2 space-y-2">
                   {fileList.length === 0 ? (
-                    <Skeleton lines={3} />
+                    <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                      <div className="text-white/15 mb-2">
+                        <svg width="40" height="40" viewBox="0 0 120 120" fill="none"><path d="M35 25H70L85 40V95H35V25Z" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.5" /><path d="M70 25V40H85" stroke="currentColor" strokeWidth="1.5" opacity="0.5" /></svg>
+                      </div>
+                      <p className="text-xs text-white/30">Files will appear here once agents finish generating code</p>
+                    </div>
                   ) : (
                     <>
                       {groupedFiles.frontend.length > 0 && (

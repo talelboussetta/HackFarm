@@ -5,6 +5,8 @@ HackFarmer — FastAPI application.
 import asyncio
 import logging
 import os
+import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -25,17 +27,26 @@ from src.api.routes.settings import router as settings_router
 from src.api.routes.downloads import router as downloads_router
 
 # ── Logging ───────────────────────────────────────────────────
+LOG_FORMAT = '%(asctime)s %(levelname)s [%(name)s] %(message)s'
 if os.getenv("ENVIRONMENT") == "production":
-    logging.basicConfig(
-        level=logging.WARNING,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    logging.basicConfig(level=logging.WARNING, format=LOG_FORMAT)
     logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 else:
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 log = logging.getLogger(__name__)
+
+# ── Sentry ────────────────────────────────────────────────────
+if settings.SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        traces_sample_rate=0.2,
+        send_default_pii=True,
+    )
+    log.info("Sentry initialized")
 
 # ── Rate limiter ──────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
@@ -112,6 +123,23 @@ async def add_security_headers(request: Request, call_next):
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )
+    return response
+
+
+# ── Request logging middleware ────────────────────────────────
+@app.middleware("http")
+async def request_logging(request: Request, call_next):
+    request_id = str(uuid.uuid4())[:8]
+    request.state.request_id = request_id
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = round((time.perf_counter() - start) * 1000)
+    if not request.url.path.startswith("/health"):
+        log.info(
+            f"rid={request_id} {request.method} {request.url.path} "
+            f"→ {response.status_code} ({elapsed_ms}ms)"
+        )
+    response.headers["X-Request-Id"] = request_id
     return response
 
 

@@ -31,6 +31,9 @@ python-dotenv==1.0.1
 bleach==6.2.0
 slowapi==0.1.9
 
+# Monitoring
+sentry-sdk[fastapi]>=2.0.0
+
 # Appwrite (BaaS)
 appwrite>=6.0.0
 python-multipart>=0.0.9

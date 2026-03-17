@@ -3,12 +3,21 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { Upload, MessageSquare, Zap, X, Github, Lock, Globe, AlertTriangle, Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useJobSubmit } from '../hooks/useJobSubmit'
 import Button from '../components/Button'
 import Lottie from 'lottie-react'
 import submitAnim from '../animations/submit.json'
+
+const jobSchema = z.object({
+  repoName: z.string()
+    .min(1, 'Repository name is required')
+    .max(100, 'Repository name too long (max 100)')
+    .regex(/^[a-zA-Z0-9_.-]+$/, 'Only letters, numbers, hyphens, dots, and underscores'),
+  prompt: z.string().max(15000, 'Prompt too long (max 15,000 characters)').optional().nullable(),
+})
 
 export default function Home() {
   const navigate = useNavigate()
@@ -22,6 +31,7 @@ export default function Home() {
   const [repoPrivate, setRepoPrivate] = useState(false)
   const [retentionDays, setRetentionDays] = useState(30)
   const [localError, setLocalError] = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({})
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
@@ -45,6 +55,23 @@ export default function Home() {
 
   const handleSubmit = async () => {
     setLocalError(null)
+    setFieldErrors({})
+
+    // Client-side validation
+    const validation = jobSchema.safeParse({
+      repoName: repoName.trim(),
+      prompt: tab === 'describe' ? prompt.trim() : null,
+    })
+    if (!validation.success) {
+      const errors = {}
+      validation.error.issues.forEach(issue => {
+        errors[issue.path[0]] = issue.message
+      })
+      setFieldErrors(errors)
+      toast.error(Object.values(errors)[0])
+      return
+    }
+
     try {
       const result = await submit({
         file: tab === 'upload' ? file : null,
@@ -165,19 +192,24 @@ export default function Home() {
                   value={prompt}
                   onChange={(e) => {
                     setPrompt(e.target.value)
+                    setFieldErrors(prev => ({...prev, prompt: undefined}))
                     if (!repoName && e.target.value.length > 10) {
                       const slug = e.target.value.slice(0, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')
                       setRepoName(slug)
                     }
                   }}
                   placeholder="Describe what you're building — the problem, users, and tech you want"
-                  className="w-full min-h-[160px] bg-black/20 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
+                  className={`w-full min-h-[160px] bg-black/20 border rounded-xl p-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${fieldErrors.prompt ? 'border-red-500/50' : 'border-white/10'}`}
                 />
-                <div className="absolute bottom-3 right-3">
+                <div className="absolute bottom-3 right-3 flex items-center gap-3">
+                  <span className={`text-[10px] px-2 py-1 rounded tabular-nums ${prompt.length > 14000 ? 'text-red-400' : 'text-white/20'}`}>
+                    {prompt.length.toLocaleString()}/15,000
+                  </span>
                   <span className="text-[10px] text-white/20 bg-white/5 px-2 py-1 rounded cursor-default" title="Coming soon">
                     ✨ Enhance with AI
                   </span>
                 </div>
+                {fieldErrors.prompt && <p className="text-xs text-red-400 mt-1">{fieldErrors.prompt}</p>}
               </div>
             </motion.div>
           )}
@@ -200,10 +232,11 @@ export default function Home() {
                 <input
                   type="text"
                   value={repoName}
-                  onChange={(e) => setRepoName(e.target.value.replace(/[^a-zA-Z0-9_.-]/g, ''))}
+                  onChange={(e) => { setRepoName(e.target.value.replace(/[^a-zA-Z0-9_.-]/g, '')); setFieldErrors(prev => ({...prev, repoName: undefined})) }}
                   placeholder="my-awesome-project"
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-blue-500/50 outline-none"
+                  className={`w-full bg-black/40 border rounded-lg px-4 py-2 text-sm focus:border-blue-500/50 outline-none ${fieldErrors.repoName ? 'border-red-500/50' : 'border-white/10'}`}
                 />
+                {fieldErrors.repoName && <p className="text-xs text-red-400 mt-1">{fieldErrors.repoName}</p>}
               </div>
 
               <div className="flex items-center justify-between">

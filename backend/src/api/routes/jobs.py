@@ -63,6 +63,25 @@ async def create_job(
     if not providers:
         raise HTTPException(400, "Add at least one API key in Settings before generating a project")
 
+    # Validation 3b: daily job limit (10 jobs/day per user)
+    DAILY_JOB_LIMIT = 10
+    try:
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        today_jobs = databases.list_documents(
+            DB, "jobs",
+            [
+                Query.equal("userId", user["id"]),
+                Query.greater_than_equal("$createdAt", today_start),
+                Query.limit(1),
+            ]
+        )
+        if today_jobs["total"] >= DAILY_JOB_LIMIT:
+            raise HTTPException(429, f"Daily limit reached ({DAILY_JOB_LIMIT} jobs/day). Try again tomorrow.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.warning(f"Could not check daily limit: {e}")
+
     # Parse input (do this before status check to fail early if invalid)
     if file:
         # MIME type check
@@ -138,27 +157,42 @@ async def create_job(
 @router.get("")
 async def list_jobs(
     user: dict = Depends(get_current_user),
+    offset: int = 0,
+    limit: int = 20,
 ):
-    """Return all of the current user's jobs, newest first."""
+    """Return the current user's jobs, newest first, with pagination."""
+    limit = min(limit, 100)  # cap at 100
+    offset = max(offset, 0)
     result = databases.list_documents(
         DB, "jobs",
-        [Query.equal("userId", user["id"]), Query.order_desc("$createdAt"), Query.limit(50)]
+        [
+            Query.equal("userId", user["id"]),
+            Query.order_desc("$createdAt"),
+            Query.limit(limit),
+            Query.offset(offset),
+        ]
     )
-    return [
-        {
-            "id": j["$id"],
-            "status": j["status"],
-            "input_type": j["inputType"],
-            "repo_name": j["repoName"],
-            "repo_private": j["repoPrivate"],
-            "github_url": j.get("githubUrl"),
-            "zip_path": j.get("zipFileId"),
-            "created_at": j["$createdAt"],
-            "completed_at": j.get("completedAt"),
-            "error_message": j.get("errorMessage"),
-        }
-        for j in result["documents"]
-    ]
+    return {
+        "jobs": [
+            {
+                "id": j["$id"],
+                "status": j["status"],
+                "input_type": j["inputType"],
+                "repo_name": j["repoName"],
+                "repo_private": j["repoPrivate"],
+                "github_url": j.get("githubUrl"),
+                "zip_path": j.get("zipFileId"),
+                "created_at": j["$createdAt"],
+                "completed_at": j.get("completedAt"),
+                "error_message": j.get("errorMessage"),
+                "token_usage": j.get("tokenUsage"),
+            }
+            for j in result["documents"]
+        ],
+        "total": result["total"],
+        "offset": offset,
+        "limit": limit,
+    }
 
 
 # ── GET /api/jobs/{job_id} ────────────────────────────────────
@@ -294,11 +328,20 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
 
       final_status = "failed" if result.get("errors") else "completed"
       error_msg = "; ".join(result.get("errors", [])[:3]) if result.get("errors") else None
+
+      # Collect token usage from the LLM router
+      usage = llm.token_usage
+      token_usage_str = (
+          f"in={usage['input_tokens']} out={usage['output_tokens']} "
+          f"total={usage['total_tokens']} calls={usage['llm_calls']}"
+      )
+
       databases.update_document(DB, "jobs", job_id, {
           "status": final_status,
           "githubUrl": result.get("github_url", ""),
           "completedAt": datetime.now(timezone.utc).isoformat(),
-          "errorMessage": error_msg
+          "errorMessage": error_msg,
+          "tokenUsage": token_usage_str,
       })
       # Only emit job_failed for partial — github_agent already emits job_complete on success
       if result.get("errors"):

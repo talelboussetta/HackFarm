@@ -1,9 +1,19 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion'
 import { Github, Mail, Lock, User, Eye, EyeOff, ChevronDown } from 'lucide-react'
+import { toast } from 'sonner'
+import { z } from 'zod'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import Lenis from '@studio-freight/lenis'
+
+const loginSchema = z.object({
+  email: z.string().email('Enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+})
+const signupSchema = loginSchema.extend({
+  name: z.string().min(1, 'Name is required').max(100),
+})
 
 /* ─── design tokens ─── */
 const gold = '#c9a84c'
@@ -166,16 +176,30 @@ export default function Landing() {
   const handleEmailAuth = async (e) => {
     e.preventDefault()
     setLocalError(null)
+
+    // Validate form
+    const schema = authMode === 'signup' ? signupSchema : loginSchema
+    const result = schema.safeParse({ email, password, ...(authMode === 'signup' ? { name: name || email.split('@')[0] } : {}) })
+    if (!result.success) {
+      const msg = result.error.issues[0].message
+      setLocalError(msg)
+      toast.error(msg)
+      return
+    }
+
     setLoading(true)
     try {
       if (authMode === 'signup') {
         await signupWithEmail(email, password, name || email.split('@')[0])
+        toast.success('Account created!')
       } else {
         await loginWithEmail(email, password)
+        toast.success('Welcome back!')
       }
       navigate('/')
     } catch (err) {
       setLocalError(err.message)
+      toast.error(err.message || 'Authentication failed')
     } finally {
       setLoading(false)
     }
