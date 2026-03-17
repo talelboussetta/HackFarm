@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import {
   ReactFlow, Background, useNodesState, useEdgesState,
-  Handle, Position
+  Handle, Position, MarkerType
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import Lottie from 'lottie-react'
@@ -181,6 +181,14 @@ export default function AgentPipelineGraph({ agentStates, onNodeClick }) {
         target: tgt,
         type: 'smoothstep',
         animated: isActive,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 14,
+          height: 14,
+          color: srcStatus === 'done' ? accent
+            : srcStatus === 'running' ? 'rgba(59,130,246,0.5)'
+            : 'rgba(255,255,255,0.15)',
+        },
         style: {
           stroke: srcStatus === 'done' ? accent
             : srcStatus === 'running' ? 'rgba(59,130,246,0.5)'

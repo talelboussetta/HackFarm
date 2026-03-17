@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, FileCode2, Brain, Terminal, ScrollText } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Loader2, FileCode2, Brain, Terminal, ScrollText } from 'lucide-react'
 import { AGENT_THEMES } from '../config/agentThemes'
 import { useJobStream } from '../hooks/useJobStream'
 import ParticleField from '../components/ParticleField'
@@ -801,6 +801,54 @@ export default function AgentStagePage() {
           <ArrowLeft size={14} /> Back to pipeline
         </motion.button>
       </div>
+
+      {/* Prev / Next agent navigation arrows */}
+      {agentIndex > 0 && (
+        <motion.button
+          onClick={() => navigate(`/job/${jobId}/agent/${AGENT_KEYS[agentIndex - 1]}`)}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          whileHover={{ scale: 1.1, x: -2 }}
+          whileTap={{ scale: 0.95 }}
+          title={`Previous: ${AGENT_THEMES[AGENT_KEYS[agentIndex - 1]]?.label || AGENT_KEYS[agentIndex - 1]}`}
+          style={{
+            position: 'fixed', left: 20, top: '50%', transform: 'translateY(-50%)',
+            zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            padding: '14px 10px', borderRadius: 16,
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: 'rgba(255,255,255,0.6)', cursor: 'pointer', outline: 'none',
+          }}
+        >
+          <ChevronLeft size={22} />
+          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, opacity: 0.5 }}>
+            {AGENT_THEMES[AGENT_KEYS[agentIndex - 1]]?.label || 'Prev'}
+          </span>
+        </motion.button>
+      )}
+      {agentIndex < AGENT_KEYS.length - 1 && (
+        <motion.button
+          onClick={() => navigate(`/job/${jobId}/agent/${AGENT_KEYS[agentIndex + 1]}`)}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          whileHover={{ scale: 1.1, x: 2 }}
+          whileTap={{ scale: 0.95 }}
+          title={`Next: ${AGENT_THEMES[AGENT_KEYS[agentIndex + 1]]?.label || AGENT_KEYS[agentIndex + 1]}`}
+          style={{
+            position: 'fixed', right: 20, top: '50%', transform: 'translateY(-50%)',
+            zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            padding: '14px 10px', borderRadius: 16,
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: 'rgba(255,255,255,0.6)', cursor: 'pointer', outline: 'none',
+          }}
+        >
+          <ChevronRight size={22} />
+          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, opacity: 0.5 }}>
+            {AGENT_THEMES[AGENT_KEYS[agentIndex + 1]]?.label || 'Next'}
+          </span>
+        </motion.button>
+      )}
 
       {/* All page content sits above the fixed background */}
       <div style={{ position: 'relative', zIndex: 2 }}>

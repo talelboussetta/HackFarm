@@ -36,9 +36,9 @@ export default function Settings() {
   const [retention, setRetention] = useState('30')
 
   const providers = [
-    { id: 'gemini', name: 'Google Gemini', description: 'Power your project with Gemini 2.0 Flash.', icon: Zap },
-    { id: 'groq', name: 'Groq', description: 'Ultra-fast Llama 3 generation.', icon: Zap },
-    { id: 'openrouter', name: 'OpenRouter', description: 'Access any model with a single key.', icon: Globe },
+    { id: 'gemini', name: 'Google Gemini', description: 'Power your project with Gemini 2.0 Flash.', icon: Zap, keyUrl: 'https://aistudio.google.com/app/apikey', keyLabel: 'Get Gemini API Key' },
+    { id: 'groq', name: 'Groq', description: 'Ultra-fast Llama 3 generation.', icon: Zap, keyUrl: 'https://console.groq.com/keys', keyLabel: 'Get Groq API Key' },
+    { id: 'openrouter', name: 'OpenRouter', description: 'Access any model with a single key.', icon: Globe, keyUrl: 'https://openrouter.ai/keys', keyLabel: 'Get OpenRouter API Key' },
   ]
 
   useEffect(() => {
@@ -157,6 +157,16 @@ export default function Settings() {
           Connect your API keys to enable AI agents. Keys are encrypted at rest.
         </p>
 
+        <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 space-y-2">
+          <p className="text-xs text-blue-300/80 font-medium">💡 Quick Start</p>
+          <ul className="text-xs text-white/40 space-y-1 list-disc list-inside">
+            <li><strong className="text-white/60">Groq</strong> — free tier, fastest inference. Best for quick iterations.</li>
+            <li><strong className="text-white/60">Gemini</strong> — free tier available. Great for detailed code generation.</li>
+            <li><strong className="text-white/60">OpenRouter</strong> — one key for 100+ models. Pay-per-use, most flexible.</li>
+          </ul>
+          <p className="text-[10px] text-white/25 mt-1">Add multiple keys for automatic fallback — if one provider fails, we try the next.</p>
+        </div>
+
         <AnimatePresence>
           {noKeysConfigured && (
             <motion.div
@@ -196,6 +206,15 @@ export default function Settings() {
                     <div>
                       <h4 className="font-bold">{p.name}</h4>
                       <p className="text-xs text-white/40">{p.description}</p>
+                      <a
+                        href={p.keyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 mt-1 transition-colors"
+                      >
+                        <Key size={10} />
+                        {p.keyLabel} →
+                      </a>
                     </div>
                   </div>
                   
