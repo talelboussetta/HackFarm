@@ -184,7 +184,6 @@ async def list_jobs(
                 "repo_name": j["repoName"],
                 "repo_private": j["repoPrivate"],
                 "github_url": j.get("githubUrl"),
-                "zip_path": j.get("zipFileId"),
                 "created_at": j["$createdAt"],
                 "completed_at": j.get("completedAt"),
                 "error_message": j.get("errorMessage"),
@@ -226,7 +225,6 @@ async def get_job(
         "repo_name": job["repoName"],
         "repo_private": job["repoPrivate"],
         "github_url": job.get("githubUrl"),
-        "zip_path": job.get("zipFileId"),
         "error_message": job.get("errorMessage"),
         "created_at": job["$createdAt"],
         "completed_at": job.get("completedAt"),
@@ -249,27 +247,24 @@ async def get_job(
 
 def _get_zip_bytes(job: dict) -> bytes:
     """Download the ZIP from Appwrite Storage for a given job."""
-    zip_file_id = job.get("zipFileId")
-    if not zip_file_id:
-        try:
-            recent = databases.list_documents(
-                DB,
-                "job-events",
-                [
-                    Query.equal("jobId", job["$id"]),
-                    Query.equal("eventType", "job_complete"),
-                    Query.order_desc("$createdAt"),
-                    Query.limit(1),
-                ],
-            )
-            docs = recent.get("documents", [])
-            if docs:
-                payload = json.loads(docs[0].get("payload") or "{}")
-                zip_file_id = payload.get("zip_file_id")
-                if zip_file_id:
-                    databases.update_document(DB, "jobs", job["$id"], {"zipFileId": zip_file_id})
-        except Exception:
-            zip_file_id = None
+    zip_file_id = None
+    try:
+        recent = databases.list_documents(
+            DB,
+            "job-events",
+            [
+                Query.equal("jobId", job["$id"]),
+                Query.equal("eventType", "job_complete"),
+                Query.order_desc("$createdAt"),
+                Query.limit(1),
+            ],
+        )
+        docs = recent.get("documents", [])
+        if docs:
+            payload = json.loads(docs[0].get("payload") or "{}")
+            zip_file_id = payload.get("zip_file_id")
+    except Exception:
+        zip_file_id = None
     if not zip_file_id:
         raise HTTPException(404, "ZIP not available — job may still be running")
     try:
@@ -508,7 +503,6 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
       databases.update_document(DB, "jobs", job_id, {
           "status": final_status,
           "githubUrl": result.get("github_url", ""),
-          "zipFileId": result.get("zip_file_id", ""),
           "completedAt": datetime.now(timezone.utc).isoformat(),
           "errorMessage": error_msg,
       })

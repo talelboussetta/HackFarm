@@ -197,8 +197,6 @@ async def _github_agent_impl(state: ProjectState) -> dict:
             "githubUrl": github_url,
             "completedAt": datetime.now(timezone.utc).isoformat(),
         }
-        if zip_file_id:
-            update_data["zipFileId"] = zip_file_id
         databases.update_document(DB, "jobs", job_id, update_data)
     except Exception as e:
         log.warning(f"Job update failed: {e}")

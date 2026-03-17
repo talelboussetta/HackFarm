@@ -197,7 +197,6 @@ def setup_jobs():
     create_string_attr(DATABASE_ID, coll_id, "priority", 10, default="low")
     create_bool_attr(DATABASE_ID, coll_id, "repoPrivate", required=True, default=False)
     create_string_attr(DATABASE_ID, coll_id, "githubUrl", 200)
-    create_string_attr(DATABASE_ID, coll_id, "zipFileId", 36)
     create_int_attr(DATABASE_ID, coll_id, "retentionDays", default=30)
     create_string_attr(DATABASE_ID, coll_id, "errorMessage", 500)
     create_string_attr(DATABASE_ID, coll_id, "completedAt", 30)

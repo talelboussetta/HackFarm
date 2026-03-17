@@ -12,7 +12,6 @@ import {
   Code2,
   Calendar,
   ChevronRight,
-  Download,
   Trash2,
   FileText,
   MessageSquare,
@@ -166,7 +165,6 @@ export default function History() {
                   const repoName = job.repo_name || job.repoName || 'Untitled'
                   const inputType = job.input_type || job.inputType || 'text'
                   const githubUrl = job.github_url || job.githubUrl
-                  const zipFileId = job.zip_file_id || job.zipFileId
                   const createdAt = job.created_at || job.$createdAt || job.createdAt
 
                   return (
@@ -207,11 +205,6 @@ export default function History() {
                           {githubUrl && (
                             <a href={githubUrl} target="_blank" rel="noreferrer" className="p-1.5 text-white/30 hover:text-white transition-colors" title="Open GitHub">
                               <ExternalLink size={14} />
-                            </a>
-                          )}
-                          {zipFileId && (
-                            <a href={`/api/downloads/${jobId}`} className="p-1.5 text-white/30 hover:text-white transition-colors" title="Download ZIP">
-                              <Download size={14} />
                             </a>
                           )}
                           <button
