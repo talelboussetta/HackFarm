@@ -167,3 +167,22 @@ class GitHubClient:
 
             logger.info(f"[GitHub] Pushed {len(files)} files to {repo} ({commit_sha[:8]})")
             return commit_sha
+
+    async def get_file_content(self, repo: str, path: str) -> str | None:
+        """Fetch file content from GitHub repo (tries main then master)."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for ref in ("main", "master"):
+                resp = await client.get(
+                    f"{API}/repos/{repo}/contents/{path}",
+                    headers=self.headers,
+                    params={"ref": ref},
+                )
+                if resp.status_code == 404:
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("encoding") == "base64":
+                    raw = (data.get("content") or "").replace("\n", "")
+                    return base64.b64decode(raw).decode("utf-8", errors="replace")
+                return data.get("content") or ""
+        return None

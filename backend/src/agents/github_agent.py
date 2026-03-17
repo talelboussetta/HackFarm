@@ -150,7 +150,22 @@ async def _github_agent_impl(state: ProjectState) -> dict:
     # Step 5: push all generated files + README.md
     all_files = dict(state.get("generated_files", {}))
     readme = state.get("readme_content", "")
-    if readme:
+    refinement_feedback = (state.get("refinement_feedback") or "").strip()
+    if existing_github_url and refinement_feedback:
+        try:
+            existing_readme = await client.get_file_content(full_name, "README.md")
+        except Exception:
+            existing_readme = None
+        if existing_readme:
+            all_files["README.md"] = (
+                existing_readme.rstrip()
+                + "\n\n## Refinement Update\n\n"
+                + refinement_feedback
+                + "\n"
+            )
+        elif readme:
+            all_files["README.md"] = readme
+    elif readme:
         all_files["README.md"] = readme
 
     publish(job_id, "agent_thinking", {
