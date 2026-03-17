@@ -13,6 +13,7 @@ const Job = lazy(() => import('./pages/Job'));
 const History = lazy(() => import('./pages/History'));
 const Settings = lazy(() => import('./pages/Settings'));
 const AgentStagePage = lazy(() => import('./pages/AgentStagePage'));
+const Admin = lazy(() => import('./pages/Admin'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-screen bg-[#0a0a0a]">
@@ -24,6 +25,8 @@ const HomeWithLayout = () => <Layout><Suspense fallback={<PageLoader />}><Home /
 const JobWithLayout = () => <Layout><Suspense fallback={<PageLoader />}><Job /></Suspense></Layout>
 const HistoryWithLayout = () => <Layout><Suspense fallback={<PageLoader />}><History /></Suspense></Layout>
 const SettingsWithLayout = () => <Layout><Suspense fallback={<PageLoader />}><Settings /></Suspense></Layout>
+
+const AdminWithLayout = () => <Layout><Suspense fallback={<PageLoader />}><Admin /></Suspense></Layout>
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -38,6 +41,7 @@ function AppRoutes() {
         <Route path="/job/:jobId/agent/:agentKey" element={user ? <AgentStagePage /> : <Navigate to="/" replace />} />
         <Route path="/history" element={user ? <HistoryWithLayout /> : <Navigate to="/" replace />} />
         <Route path="/settings" element={user ? <SettingsWithLayout /> : <Navigate to="/" replace />} />
+        <Route path="/admin" element={user ? <AdminWithLayout /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

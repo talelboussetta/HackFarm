@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # ── Sentry DSN (optional) ──────────────────────────────────
     SENTRY_DSN: str = ""
 
+    # ── Admin (optional) ──────────────────────────────────────
+    # Comma-separated list of Appwrite user IDs that can access /api/admin/*
+    ADMIN_USER_IDS: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 

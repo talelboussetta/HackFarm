@@ -25,6 +25,7 @@ from src.api.routes.jobs import router as jobs_router
 from src.api.routes.stream import router as stream_router
 from src.api.routes.settings import router as settings_router
 from src.api.routes.downloads import router as downloads_router
+from src.api.routes.admin import router as admin_router
 
 # ── Logging ───────────────────────────────────────────────────
 LOG_FORMAT = '%(asctime)s %(levelname)s [%(name)s] %(message)s'
@@ -163,6 +164,7 @@ app.include_router(jobs_router)
 app.include_router(stream_router, prefix="/stream", tags=["stream"])
 app.include_router(settings_router)
 app.include_router(downloads_router, prefix="/api/downloads", tags=["downloads"])
+app.include_router(admin_router)
 
 
 @app.get("/health")
