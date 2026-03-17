@@ -56,21 +56,31 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
+    # Appwrite SDK is synchronous — run in thread with timeout so startup
+    # doesn't hang if Appwrite Cloud is unreachable.
     try:
-        databases.list_collections(settings.APPWRITE_DATABASE_ID)
+        await asyncio.wait_for(
+            asyncio.to_thread(databases.list_collections, settings.APPWRITE_DATABASE_ID),
+            timeout=10.0,
+        )
         log.info("Appwrite connected")
     except Exception as e:
-        log.error(f"Appwrite connection failed: {e}")
+        log.error(f"Appwrite connection failed (server will start anyway): {e}")
 
     # Recover stuck jobs from a previous crash (mark running → failed)
     try:
         from appwrite.query import Query
-        stuck = databases.list_documents(
-            settings.APPWRITE_DATABASE_ID, "jobs",
-            [Query.equal("status", "running"), Query.limit(50)],
+        stuck = await asyncio.wait_for(
+            asyncio.to_thread(
+                databases.list_documents,
+                settings.APPWRITE_DATABASE_ID, "jobs",
+                [Query.equal("status", "running"), Query.limit(50)],
+            ),
+            timeout=10.0,
         )
         for job in stuck["documents"]:
-            databases.update_document(
+            await asyncio.to_thread(
+                databases.update_document,
                 settings.APPWRITE_DATABASE_ID, "jobs", job["$id"],
                 {"status": "failed", "errorMessage": "Server restarted — job interrupted"},
             )
