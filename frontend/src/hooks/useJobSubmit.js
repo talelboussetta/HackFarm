@@ -27,7 +27,8 @@ export function useJobSubmit() {
         formData.append("repo_name", repoName);
         formData.append("repo_private", String(repoPrivate));
         formData.append("retention_days", String(retentionDays));
-        if (modelPreference) formData.append("model_preference", modelPreference);
+        if (modelPreference)
+          formData.append("model_preference", modelPreference);
 
         const headers = { "X-Appwrite-Session": jwt };
 
