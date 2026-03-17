@@ -543,8 +543,10 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
 
 async def run_refine_task(job_id, user_id, original_prompt, feedback,
                           repo_name, repo_private):
-  """Re-run coding agents with user feedback, skipping analyst + architect."""
+  """Re-run agents with feedback; ensure analysis/architecture context is present."""
   from src.agents.refine_graph import refine_pipeline
+  from src.agents.analyst import analyst
+  from src.agents.architect import architect
 
   async with GlobalSemaphore():
     try:
@@ -570,6 +572,7 @@ async def run_refine_task(job_id, user_id, original_prompt, feedback,
       state["llm"] = llm
       state["repo_name"] = repo_name
       state["repo_private"] = repo_private
+      state["retry_count"] = 0
 
       # Pre-populate analyst + architect outputs from previous run
       # (fetch from agent-runs so the coding agents have context)
@@ -585,6 +588,17 @@ async def run_refine_task(job_id, user_id, original_prompt, feedback,
               })
       except Exception:
           pass
+
+      # Rebuild prerequisite context so coding agents always have api_contracts.
+      analyst_out = await analyst(state)
+      if analyst_out.get("errors"):
+          raise ValueError("; ".join(analyst_out["errors"]))
+      state.update(analyst_out)
+
+      architect_out = await architect(state)
+      if architect_out.get("errors"):
+          raise ValueError("; ".join(architect_out["errors"]))
+      state.update(architect_out)
 
       # Run the refinement pipeline (coding agents → integrator → validator → github)
       try:
