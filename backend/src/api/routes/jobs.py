@@ -333,6 +333,61 @@ async def get_user_stats(user: dict = Depends(get_current_user)):
     }
 
 
+# ── POST /api/jobs/{job_id}/refine ────────────────────────────
+
+@router.post("/{job_id}/refine")
+async def refine_job(
+    job_id: str,
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    """Re-run coding agents with user feedback appended to the original prompt."""
+    try:
+        job = databases.get_document(DB, "jobs", job_id)
+    except Exception:
+        raise HTTPException(404, "Job not found")
+
+    if job["userId"] != user["id"]:
+        raise HTTPException(403, "Not your job")
+
+    if job["status"] not in ("completed", "failed"):
+        raise HTTPException(400, "Can only refine completed or failed jobs")
+
+    body = await request.json()
+    feedback = (body.get("feedback") or "").strip()
+    if not feedback:
+        raise HTTPException(400, "Feedback is required")
+    if len(feedback) > 5000:
+        raise HTTPException(400, "Feedback too long (max 5000 characters)")
+
+    # Check concurrency
+    if not can_run_job(user["id"]):
+        raise HTTPException(503, "Server busy — try again in a minute")
+
+    # Mark job as running again
+    databases.update_document(DB, "jobs", job_id, {
+        "status": "running",
+        "errorMessage": None,
+    })
+
+    # Notify frontend to reset agent states and job status
+    publish(job_id, "job_refining", {"feedback": feedback[:200]})
+
+    # Spawn refinement task
+    asyncio.create_task(
+        run_refine_task(
+            job_id=job_id,
+            user_id=user["id"],
+            original_prompt=job.get("rawText", ""),
+            feedback=feedback,
+            repo_name=job.get("repoName", "project"),
+            repo_private=job.get("repoPrivate", False),
+        )
+    )
+
+    return {"status": "refining", "job_id": job_id}
+
+
 # ── DELETE /api/jobs/{job_id} ─────────────────────────────────
 
 @router.delete("/{job_id}")
@@ -455,3 +510,91 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
         fire_webhook({"job_id": job_id})
       except Exception:
         pass
+
+
+# ── Background task: run_refine_task ─────────────────────────
+
+async def run_refine_task(job_id, user_id, original_prompt, feedback,
+                          repo_name, repo_private):
+  """Re-run coding agents with user feedback, skipping analyst + architect."""
+  from src.agents.refine_graph import refine_pipeline
+
+  async with GlobalSemaphore():
+    try:
+      providers = get_user_llm_providers(user_id)
+      if not providers:
+          raise ValueError("No valid LLM API keys found.")
+      llm = LLMRouter(providers)
+
+      # Re-fetch the job to get existing agent-run data for architectural context
+      job = databases.get_document(DB, "jobs", job_id)
+
+      # Build state with feedback injected
+      combined_prompt = (
+          f"{original_prompt}\n\n"
+          f"--- USER REFINEMENT FEEDBACK ---\n"
+          f"{feedback}\n"
+          f"--- END FEEDBACK ---\n\n"
+          f"Please regenerate the code incorporating the feedback above. "
+          f"Keep the same architecture and API contracts."
+      )
+
+      state = normalize_to_initial_state(combined_prompt, "text", job_id, user_id)
+      state["llm"] = llm
+      state["repo_name"] = repo_name
+      state["repo_private"] = repo_private
+
+      # Pre-populate analyst + architect outputs from previous run
+      # (fetch from agent-runs so the coding agents have context)
+      try:
+          runs = databases.list_documents(
+              DB, "agent-runs",
+              [Query.equal("jobId", job_id), Query.order_asc("startedAt")],
+          )
+          for run in runs.get("documents", []):
+              # Reset status so events render properly
+              databases.update_document(DB, "agent-runs", run["$id"], {
+                  "status": "pending",
+              })
+      except Exception:
+          pass
+
+      # Run the refinement pipeline (coding agents → integrator → validator → github)
+      try:
+          result = await asyncio.wait_for(
+              refine_pipeline.ainvoke(state),
+              timeout=PIPELINE_TIMEOUT_SECONDS,
+          )
+      except asyncio.TimeoutError:
+          raise TimeoutError("Refinement timed out")
+
+      final_status = "failed" if result.get("errors") else "completed"
+      error_msg = "; ".join(result.get("errors", [])[:3]) if result.get("errors") else None
+
+      usage = llm.token_usage
+      token_usage_str = (
+          f"in={usage['input_tokens']} out={usage['output_tokens']} "
+          f"total={usage['total_tokens']} calls={usage['llm_calls']}"
+      )
+
+      databases.update_document(DB, "jobs", job_id, {
+          "status": final_status,
+          "githubUrl": result.get("github_url", ""),
+          "completedAt": datetime.now(timezone.utc).isoformat(),
+          "errorMessage": error_msg,
+          "tokenUsage": token_usage_str,
+      })
+      if result.get("errors"):
+          publish(job_id, "job_failed", {"error": error_msg or "Refinement failed", "last_agent": "unknown"})
+    except Exception as e:
+      log.error(f"Refinement failed job={job_id}: {type(e).__name__}: {e}", exc_info=True)
+      error_str = f"{type(e).__name__}: {str(e)[:400]}"
+      publish(job_id, "job_failed", {"error": error_str, "last_agent": "unknown"})
+      try:
+          databases.update_document(DB, "jobs", job_id, {
+              "status": "failed",
+              "errorMessage": error_str,
+              "completedAt": datetime.now(timezone.utc).isoformat()
+          })
+      except Exception:
+          pass

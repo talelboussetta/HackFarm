@@ -7,6 +7,7 @@ import { useJobStream } from '../hooks/useJobStream'
 import { useAuth } from '../hooks/useAuth'
 import { api } from '../lib/api'
 import CodeViewer from '../components/CodeViewer'
+import RefinementPanel from '../components/RefinementPanel'
 import AgentPipelineGraph from '../components/AgentPipelineGraph'
 import AgentDrawer from '../components/AgentDrawer'
 import Lottie from 'lottie-react'
@@ -368,6 +369,9 @@ export default function Job() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Refinement Panel — refine completed/failed jobs */}
+      <RefinementPanel jobId={id} jobStatus={jobStatus} />
 
       {/* Agent Drawer */}
       <AgentDrawer

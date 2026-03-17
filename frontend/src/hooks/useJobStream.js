@@ -59,6 +59,12 @@ export function useJobStream(jobId) {
         })
       }
     }
+    if (type === 'job_refining') {
+      // Reset all agent states for a new refinement run
+      setAgentStates({})
+      setJobStatus('running')
+      setResult(null)
+    }
     if (type === 'job_complete') { setJobStatus('complete'); setResult(payload) }
     if (type === 'job_failed')   { setJobStatus('failed'); setResult(payload) }
   }
