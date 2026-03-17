@@ -218,12 +218,15 @@ async def test_key(
                 },
             )
 
-            # Some Gemini API setups expect the API key as a query param (?key=) instead of
-            # an Authorization header. If the initial request fails for Gemini, retry with
-            # params and without the Authorization header.
-            if resp.status_code >= 400 and provider == "gemini":
+            # Gemini specifics: keep Authorization header (required for some backends)
+            # and optionally pass ?key= for the OpenAI-compatible shim. Only try the
+            # alternate form when the error suggests auth issues (not for rate limits).
+            if provider == "gemini" and resp.status_code in {400, 401, 403}:
                 try:
-                    alt_headers = {"Content-Type": "application/json"}
+                    alt_headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {decrypted_key}",
+                    }
                     alt_headers.update(cfg.get("extra_headers", {}))
                     alt_resp = await client.post(
                         url,
@@ -235,26 +238,54 @@ async def test_key(
                             "max_tokens": 10,
                         },
                     )
-                    # Use alt_resp if it provides more information
                     resp = alt_resp
                 except Exception:
                     pass
+
+            # Explicitly treat rate limits as a valid-but-busy signal so we don't mark the
+            # key invalid. Caller can surface the warning to the user.
+            if resp.status_code == 429:
+                databases.update_document(
+                    db_id, "user-api-keys", doc["$id"],
+                    {
+                        "isValid": True,
+                        "lastUsed": datetime.now(timezone.utc).isoformat()
+                    }
+                )
+                return {"valid": True, "warning": "Provider rate limited. Try again in a bit."}
+
             if resp.status_code >= 400:
                 # Parse error message from provider
                 try:
                     err_data = resp.json()
                     if isinstance(err_data, list):
                         err_data = err_data[0]
-                    err_msg = err_data.get("error", {}).get("message", resp.text[:200])
+                    err_msg = err_data.get("error", {}).get("message", None)
                 except Exception:
-                    err_msg = resp.text[:200]
+                    err_msg = None
+
+                # Fallback to raw text if JSON parsing didn't provide a message
+                raw_body = resp.text or ''
+                # Sanitize raw_body to avoid leaking keys (truncate to 1000 chars)
+                sanitized_body = raw_body.replace(decrypted_key, '***')[:1000]
+
+                # Compose a helpful error string containing status and either parsed message or raw body
+                error_summary = f"[{resp.status_code}] " + (err_msg or sanitized_body or '<no response body>')
+
+                # Log the provider response (sanitized) for debugging
+                try:
+                    import logging
+                    logging.getLogger('src.api.routes.settings').info(f"Provider test response for {provider}: {sanitized_body}")
+                except Exception:
+                    pass
+
                 # Don't mark as invalid for rate limits (429) — key is still valid
                 if resp.status_code != 429:
                     databases.update_document(
                         db_id, "user-api-keys", doc["$id"],
                         {"isValid": False}
                     )
-                return {"valid": False, "error": f"[{resp.status_code}] {err_msg}"}
+                return {"valid": False, "error": error_summary}
 
             data = resp.json()
             content = data["choices"][0]["message"]["content"].strip().lower()
