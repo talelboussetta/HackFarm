@@ -54,9 +54,6 @@ jobs:
             FRONTEND_URL=${{ secrets.FRONTEND_URL }} \
             --app hackfarmer-api
 
-      - name: Configure Heroku git remote
-        run: git remote add heroku https://heroku:${{ secrets.HEROKU_API_KEY }}@git.heroku.com/hackfarmer-api.git
-
       - uses: akhileshns/heroku-deploy@v3.13.15
         with:
           heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
