@@ -64,6 +64,5 @@ create_dirs.py
 images/
 
 # Lottie / animation assets (large binaries; serve from CDN or local public/)
-frontend/src/animations/
 # frontend/public/lottie/ — keep webm/json files tracked if needed
 C:\Users\talel\Desktop\hackfarm\HackFarm\frontend\public\lottie/*

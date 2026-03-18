@@ -23,7 +23,7 @@ Sentry.init({
   replaysOnErrorSampleRate: 1.0,
 });
 
-const sentryCreateBrowserRouter = Sentry.wrapCreateBrowserRouter(createBrowserRouter);
+const sentryCreateBrowserRouter = Sentry.wrapCreateBrowserRouterV7(createBrowserRouter);
 const router = sentryCreateBrowserRouter([
   {
     path: '*',
