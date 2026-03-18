@@ -1,10 +1,7 @@
-# ── Stage 1: build ─────────────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
-
 COPY package.json package-lock.json* ./
 RUN npm ci --frozen-lockfile
-
 COPY . .
 ARG VITE_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
 ARG VITE_APPWRITE_PROJECT_ID=69b687b000219c573c47
@@ -16,14 +13,8 @@ ENV VITE_APPWRITE_DATABASE_ID=$VITE_APPWRITE_DATABASE_ID
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
-# ── Stage 2: serve with nginx ───────────────────────────────────
 FROM nginx:alpine AS runtime
-
-# Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
-
-# SPA routing: redirect all 404s to index.html (Heroku dynamic PORT)
 COPY nginx.conf /etc/nginx/templates/default.conf.template
-
 EXPOSE 80
 CMD ["/bin/sh", "-c", "envsubst '$PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
