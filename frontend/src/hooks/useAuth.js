@@ -17,7 +17,7 @@ function _clearJWTCache() {
 /** Read the Appwrite session secret from localStorage (set by SDK as cookieFallback). */
 function _getSessionFromStorage() {
   try {
-    const projectId = import.meta.env.VITE_APPWRITE_PROJECT_ID;
+    const projectId = import.meta.env.VITE_APPWRITE_PROJECT_ID || "69b687b000219c573c47";
     const fallback = JSON.parse(localStorage.getItem("cookieFallback") || "{}");
     return fallback[`a_session_${projectId}`] || null;
   } catch {
