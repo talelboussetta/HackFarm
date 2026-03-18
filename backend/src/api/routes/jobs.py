@@ -34,6 +34,15 @@ log = logging.getLogger(__name__)
 VALID_REPO_NAME = re.compile(r"^[a-zA-Z0-9_.-]+$")
 GITHUB_REPO_RE = re.compile(r"github\.com/([^/]+)/([^/]+)")
 
+
+def _require_groq_provider(user_id: str) -> list[dict]:
+    providers = get_user_llm_providers(user_id)
+    if not providers:
+        raise HTTPException(400, "Add API keys in Settings before generating a project")
+    if not any((p.get("provider") or "").lower() == "groq" for p in providers):
+        raise HTTPException(400, "Groq API key is required. Add your Groq key in Settings.")
+    return providers
+
 # ── POST /api/jobs ────────────────────────────────────────────
 
 @router.post("")
@@ -63,9 +72,7 @@ async def create_job(
         raise HTTPException(400, "Repo name too long (max 100 characters)")
 
     # Validation 3: user must have at least one valid API key
-    providers = get_user_llm_providers(user["id"])
-    if not providers:
-        raise HTTPException(400, "Add at least one API key in Settings before generating a project")
+    providers = _require_groq_provider(user["id"])
 
     # Validation 3b: daily job limit (10 jobs/day per user)
     DAILY_JOB_LIMIT = 10
@@ -472,6 +479,9 @@ async def refine_job(
         raise HTTPException(400, "Feedback is required")
     if len(feedback) > 5000:
         raise HTTPException(400, "Feedback too long (max 5000 characters)")
+
+    # Require Groq key for refinement runs as well.
+    _require_groq_provider(user["id"])
 
     # Check concurrency
     if not can_run_job(user["id"]):

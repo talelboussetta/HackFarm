@@ -170,7 +170,7 @@ export default function Settings() {
         <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 space-y-2">
           <p className="text-xs text-blue-300/80 font-medium">💡 Quick Start</p>
           <ul className="text-xs text-white/40 space-y-1 list-disc list-inside">
-            <li><strong className="text-white/60">Groq</strong> — free tier, fastest inference. Best for quick iterations.</li>
+            <li><strong className="text-white/60">Groq</strong> — <span className="text-red-300">required</span> to run generation/refinement jobs.</li>
             <li><strong className="text-white/60">Gemini</strong> — free tier available. Great for detailed code generation.</li>
             <li><strong className="text-white/60">OpenRouter</strong> — one key for 100+ models. Pay-per-use, most flexible.</li>
           </ul>
@@ -182,7 +182,7 @@ export default function Settings() {
             <EmptyState
               icon="keys"
               title="No API keys configured"
-              description="Add at least one LLM provider key to start generating projects. We support Gemini, Groq, and OpenRouter."
+              description="Add your Groq API key first (required), then optionally add Gemini/OpenRouter for fallback."
               className="py-8 bg-white/[0.02] rounded-xl border border-dashed border-white/10"
             />
           )}
