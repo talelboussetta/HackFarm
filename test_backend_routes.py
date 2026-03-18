@@ -59,7 +59,7 @@ def test_list_jobs_empty(client):
         mock_db.list_documents.return_value = {"total": 0, "documents": []}
         r = client.get("/api/jobs")
         assert r.status_code == 200
-        assert r.json() == []
+        assert r.json() == {"jobs": [], "total": 0, "offset": 0, "limit": 20}
 
 
 # ── POST /api/jobs → 400 ─────────────────────────────────────
@@ -93,7 +93,7 @@ def test_list_keys_empty(client):
     """New user should see empty keys list."""
     with patch("src.api.routes.settings.databases") as mock_db:
         mock_db.list_documents.return_value = {"total": 0, "documents": []}
-        r = client.get("/settings/keys")
+        r = client.get("/api/settings/keys")
         assert r.status_code == 200
         assert r.json() == []
 
@@ -112,7 +112,7 @@ def test_upsert_key(client):
             "isValid": True,
             "lastUsed": None,
         }
-        r = client.post("/settings/keys", json={
+        r = client.post("/api/settings/keys", json={
             "provider": "gemini",
             "key": "test-api-key-12345"
         })
