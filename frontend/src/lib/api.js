@@ -3,7 +3,10 @@
  * Throws a clear error on 401 so callers can redirect to login.
  */
 
-const BASE_URL = "";
+const BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://hackfarmer-api-2ad66da2dadb.herokuapp.com"
+).replace(/\/$/, "");
 
 export async function api(path, options = {}, jwt = null) {
   if (!jwt && !options._noAuth) {

@@ -14,7 +14,7 @@ FROM nginx:alpine AS runtime
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# SPA routing: redirect all 404s to index.html
+# SPA routing: redirect all 404s to index.html (Heroku dynamic PORT)
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
