@@ -54,6 +54,9 @@ jobs:
             FRONTEND_URL=${{ secrets.FRONTEND_URL }} \
             --app hackfarmer-api
 
+      - name: Configure Heroku git remote
+        run: git remote add heroku https://heroku:${{ secrets.HEROKU_API_KEY }}@git.heroku.com/hackfarmer-api.git
+
       - uses: akhileshns/heroku-deploy@v3.13.15
         with:
           heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
@@ -79,6 +82,6 @@ jobs:
         working-directory: frontend
         run: |
           npm install -g appwrite-cli
-          appwrite login --endpoint ${{ secrets.APPWRITE_ENDPOINT }} --project ${{ secrets.APPWRITE_PROJECT_ID }} --key ${{ secrets.APPWRITE_API_KEY }}
-          appwrite deploy site --siteId ${{ secrets.APPWRITE_SITE_ID }} --path dist/
+          appwrite client --endpoint ${{ secrets.APPWRITE_ENDPOINT }} --project-id ${{ secrets.APPWRITE_PROJECT_ID }} --key ${{ secrets.APPWRITE_API_KEY }}
+          appwrite sites create-deployment --site-id ${{ secrets.APPWRITE_SITE_ID }} --code dist --activate true
 
