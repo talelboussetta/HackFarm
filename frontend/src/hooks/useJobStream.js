@@ -1,6 +1,7 @@
 import { appwriteClient, databases } from "../lib/appwrite";
 import { Query } from "appwrite";
 import { useState, useEffect, useRef } from "react";
+import * as Sentry from "@sentry/react";
 
 export function useJobStream(jobId) {
   const [agentStates, setAgentStates] = useState({});
@@ -53,20 +54,27 @@ export function useJobStream(jobId) {
       });
 
     // 2. Subscribe to live events via Appwrite Realtime
-    unsubRef.current = appwriteClient.subscribe(
-      `databases.${dbId}.collections.job-events.documents`,
-      (response) => {
-        if (!response.events.some((e) => e.includes(".create"))) return;
-        const doc = response.payload;
-        if (doc.jobId !== jobId) return;
-        try {
-          handleEvent(doc.eventType, JSON.parse(doc.payload));
-          lastDocIdRef.current = doc.$id;
-        } catch (e) {
-          // ignore malformed realtime payloads
-        }
-      },
-    );
+    try {
+      unsubRef.current = appwriteClient.subscribe(
+        `databases.${dbId}.collections.job-events.documents`,
+        (response) => {
+          if (!response.events.some((e) => e.includes(".create"))) return;
+          const doc = response.payload;
+          if (doc.jobId !== jobId) return;
+          try {
+            handleEvent(doc.eventType, JSON.parse(doc.payload));
+            lastDocIdRef.current = doc.$id;
+          } catch (e) {
+            // ignore malformed realtime payloads
+          }
+        },
+      );
+    } catch (e) {
+      Sentry.captureMessage("Realtime WebSocket fallback to polling", {
+        level: "warning",
+        tags: { jobId, reason: "websocket_failed" },
+      });
+    }
     // 3. Fallback poller in case Realtime drops (keeps graph live without user interaction)
     pollTimerRef.current = setInterval(async () => {
       // stop polling once job is finished or failed

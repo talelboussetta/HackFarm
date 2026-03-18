@@ -19,6 +19,9 @@ Object.keys(process.env).forEach((key) => {
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'import.meta.env.VITE_COMMIT_SHA': JSON.stringify(process.env.GITHUB_SHA || 'local'),
+  },
   server: {
     port: 3000,
     proxy: {

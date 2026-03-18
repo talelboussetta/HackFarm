@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import asyncio, base64, io, json, logging, re, zipfile
 import httpx
+import sentry_sdk
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import PlainTextResponse
 from appwrite.query import Query
@@ -574,75 +575,79 @@ async def run_pipeline_task(job_id, user_id, raw_text, input_type,
                              repo_name, repo_private, retention_days,
                              model_preference=None):
   async with GlobalSemaphore():
-    try:
-      providers = get_user_llm_providers(user_id)
-      if not providers:
-          raise ValueError("No valid LLM API keys found. Add keys in Settings and try again.")
-      llm = LLMRouter(providers, preferred_provider=model_preference)
-      # Build initial state
-      state = normalize_to_initial_state(raw_text, input_type, job_id, user_id)
-      state["llm"] = llm
-      state["repo_name"] = repo_name  # pass through for github_agent
-      state["repo_private"] = repo_private
-
-      # Run the pipeline with a timeout
+    with sentry_sdk.start_transaction(op="pipeline", name=f"pipeline.{job_id}") as tx:
+      tx.set_tag("job_id", job_id)
+      tx.set_tag("input_type", input_type)
       try:
-          result = await asyncio.wait_for(
-              pipeline.ainvoke(state),
-              timeout=PIPELINE_TIMEOUT_SECONDS,
-          )
-      except asyncio.TimeoutError:
-          raise TimeoutError(
-              f"Pipeline timed out after {PIPELINE_TIMEOUT_SECONDS // 60} minutes"
-          )
+        providers = get_user_llm_providers(user_id)
+        if not providers:
+            raise ValueError("No valid LLM API keys found. Add keys in Settings and try again.")
+        llm = LLMRouter(providers, preferred_provider=model_preference)
+        # Build initial state
+        state = normalize_to_initial_state(raw_text, input_type, job_id, user_id)
+        state["llm"] = llm
+        state["repo_name"] = repo_name  # pass through for github_agent
+        state["repo_private"] = repo_private
 
-      final_status = "failed" if result.get("errors") else "completed"
-      error_msg = "; ".join(result.get("errors", [])[:3]) if result.get("errors") else None
+        # Run the pipeline with a timeout
+        try:
+            result = await asyncio.wait_for(
+                pipeline.ainvoke(state),
+                timeout=PIPELINE_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            raise TimeoutError(
+                f"Pipeline timed out after {PIPELINE_TIMEOUT_SECONDS // 60} minutes"
+            )
 
-      # Collect token usage from the LLM router
-      usage = llm.token_usage
-      token_usage_str = (
-          f"in={usage['input_tokens']} out={usage['output_tokens']} "
-          f"total={usage['total_tokens']} calls={usage['llm_calls']}"
-      )
+        final_status = "failed" if result.get("errors") else "completed"
+        error_msg = "; ".join(result.get("errors", [])[:3]) if result.get("errors") else None
 
-      databases.update_document(DB, "jobs", job_id, {
-          "status": final_status,
-          "githubUrl": result.get("github_url", ""),
-          "completedAt": datetime.now(timezone.utc).isoformat(),
-          "errorMessage": error_msg,
-      })
-      log.info(f"Pipeline done job={job_id} status={final_status} {token_usage_str}")
-      if result.get("errors"):
-          publish(job_id, "job_failed", {"error": error_msg or "Some agents failed", "last_agent": "unknown"})
-      else:
-          publish(job_id, "job_complete", {
-              "github_url": result.get("github_url"),
-              "zip_file_id": result.get("zip_file_id"),
-              "repo_name": repo_name,
-              "token_usage": usage,
-              "architecture_mermaid": result.get("architecture_mermaid"),
-              "readme_content": result.get("readme_content"),
-              "pitch_slides": result.get("pitch_slides"),
-          })
-    except Exception as e:
-      log.error(f"Pipeline failed job={job_id}: {type(e).__name__}: {e}", exc_info=True)
-      error_str = f"{type(e).__name__}: {str(e)[:400]}"
-      publish(job_id, "job_failed", {"error": error_str, "last_agent": "unknown"})
-      try:
-          databases.update_document(DB, "jobs", job_id, {
-              "status": "failed",
-              "errorMessage": error_str,
-              "completedAt": datetime.now(timezone.utc).isoformat()
-          })
-      except Exception:
+        # Collect token usage from the LLM router
+        usage = llm.token_usage
+        token_usage_str = (
+            f"in={usage['input_tokens']} out={usage['output_tokens']} "
+            f"total={usage['total_tokens']} calls={usage['llm_calls']}"
+        )
+
+        databases.update_document(DB, "jobs", job_id, {
+            "status": final_status,
+            "githubUrl": result.get("github_url", ""),
+            "completedAt": datetime.now(timezone.utc).isoformat(),
+            "errorMessage": error_msg,
+        })
+        log.info(f"Pipeline done job={job_id} status={final_status} {token_usage_str}")
+        if result.get("errors"):
+            publish(job_id, "job_failed", {"error": error_msg or "Some agents failed", "last_agent": "unknown"})
+        else:
+            publish(job_id, "job_complete", {
+                "github_url": result.get("github_url"),
+                "zip_file_id": result.get("zip_file_id"),
+                "repo_name": repo_name,
+                "token_usage": usage,
+                "architecture_mermaid": result.get("architecture_mermaid"),
+                "readme_content": result.get("readme_content"),
+                "pitch_slides": result.get("pitch_slides"),
+            })
+      except Exception as e:
+        sentry_sdk.capture_exception(e)
+        log.error(f"Pipeline failed job={job_id}: {type(e).__name__}: {e}", exc_info=True)
+        error_str = f"{type(e).__name__}: {str(e)[:400]}"
+        publish(job_id, "job_failed", {"error": error_str, "last_agent": "unknown"})
+        try:
+            databases.update_document(DB, "jobs", job_id, {
+                "status": "failed",
+                "errorMessage": error_str,
+                "completedAt": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception:
+            pass
+      finally:
+        try:
+          from src.integrations.n8n import fire_webhook
+          fire_webhook({"job_id": job_id})
+        except Exception:
           pass
-    finally:
-      try:
-        from src.integrations.n8n import fire_webhook
-        fire_webhook({"job_id": job_id})
-      except Exception:
-        pass
 
 
 # ── Background task: run_refine_task ─────────────────────────

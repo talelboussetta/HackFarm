@@ -2,21 +2,41 @@
 HackFarmer — FastAPI application.
 """
 
+import os
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
+from sentry_sdk.integrations.asyncio import AsyncioIntegration
+from src.core.config import settings
+
+sentry_sdk.init(
+    dsn=settings.SENTRY_DSN or "",
+    environment=settings.ENVIRONMENT,
+    release=os.getenv("HEROKU_SLUG_COMMIT", "local"),
+    integrations=[
+        FastApiIntegration(transaction_style="endpoint"),
+        StarletteIntegration(transaction_style="endpoint"),
+        AsyncioIntegration(),
+    ],
+    traces_sample_rate=0.2,
+    profiles_sample_rate=0.1,
+    send_default_pii=False,
+    before_send=lambda event, hint: None if settings.ENVIRONMENT == "development" else event,
+)
+
 import asyncio
 import logging
-import os
 import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from src.core.config import settings
 from src.core.queue_manager import start_queue_poller
 from src.appwrite_client import databases
 
@@ -25,7 +45,7 @@ from src.api.routes.jobs import router as jobs_router
 from src.api.routes.stream import router as stream_router
 from src.api.routes.settings import router as settings_router
 from src.api.routes.downloads import router as downloads_router
-from src.api.routes.admin import router as admin_router
+from src.api.routes.admin import router as admin_router, require_admin
 
 # ── Logging ───────────────────────────────────────────────────
 LOG_FORMAT = '%(asctime)s %(levelname)s [%(name)s] %(message)s'
@@ -37,17 +57,6 @@ else:
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 log = logging.getLogger(__name__)
-
-# ── Sentry ────────────────────────────────────────────────────
-if settings.SENTRY_DSN:
-    import sentry_sdk
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        environment=settings.ENVIRONMENT,
-        traces_sample_rate=0.2,
-        send_default_pii=True,
-    )
-    log.info("Sentry initialized")
 
 # ── Rate limiter ──────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
@@ -185,3 +194,8 @@ async def health():
 @app.get("/internal/health")
 async def internal_health():
     return {"status": "ok", "appwrite": "connected"}
+
+
+@app.get("/api/debug/sentry-test")
+async def sentry_test(_admin: dict = Depends(require_admin)):
+    raise ValueError("Sentry test from HackFarmer backend")

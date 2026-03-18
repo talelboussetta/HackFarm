@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
@@ -51,16 +51,14 @@ function AppRoutes() {
 function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
-        <Toaster
-          theme="dark"
-          position="bottom-right"
-          toastOptions={{
-            style: { background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' },
-          }}
-        />
-        <AppRoutes />
-      </BrowserRouter>
+      <Toaster
+        theme="dark"
+        position="bottom-right"
+        toastOptions={{
+          style: { background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' },
+        }}
+      />
+      <AppRoutes />
     </ErrorBoundary>
   );
 }

@@ -10,6 +10,7 @@ import logging
 import re
 from datetime import datetime, timezone
 
+import sentry_sdk
 from src.agents.state import ProjectState
 from appwrite.id import ID
 from src.appwrite_client import databases
@@ -148,6 +149,8 @@ async def validator(state: ProjectState) -> dict:
     try:
         return await _validator_impl(state)
     except Exception as e:
+        sentry_sdk.set_tag("agent", "validator")
+        sentry_sdk.capture_exception(e)
         log.error(f"validator CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "validator", "error": f"Unexpected: {e}"})
         return {"errors": [f"validator: {type(e).__name__}: {e}"]}
@@ -177,6 +180,8 @@ async def _validator_impl(state: ProjectState) -> dict:
         })
         agent_run_id = doc["$id"]
     except Exception as e:
+        sentry_sdk.set_tag("agent", "validator")
+        sentry_sdk.capture_exception(e)
         log.warning(f"Failed to create agent-run doc: {e}")
 
     generated_files = state.get("generated_files", {})
@@ -257,6 +262,8 @@ async def _validator_impl(state: ProjectState) -> dict:
                 "outputSummary": f"Score: {score}/100, {len(all_issues)} issues found",
             })
         except Exception as e:
+            sentry_sdk.set_tag("agent", "validator")
+            sentry_sdk.capture_exception(e)
             log.warning(f"Failed to update agent-run doc: {e}")
 
     publish(job_id, "agent_done", {

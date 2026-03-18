@@ -1,18 +1,39 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import * as Sentry from '@sentry/react';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from './App';
 import InitErrorBoundary from './components/InitErrorBoundary';
 import './index.css';
 
-// ── Sentry error monitoring ──────────────────────────────────
 Sentry.init({
-  dsn: 'https://01ac7823d34622ec0f62148ee8183ee8@o4510981856296960.ingest.de.sentry.io/4511059867336784',
+  dsn: import.meta.env.VITE_SENTRY_DSN || "",
+  enabled: !!import.meta.env.VITE_SENTRY_DSN && import.meta.env.PROD,
   environment: import.meta.env.MODE,
-  sendDefaultPii: true,
-  enabled: import.meta.env.PROD,
+  release: import.meta.env.VITE_COMMIT_SHA || "local",
+  integrations: [
+    Sentry.browserTracingIntegration(),
+    Sentry.replayIntegration({
+      maskAllText: false,
+      blockAllMedia: false,
+    }),
+  ],
   tracesSampleRate: 0.2,
+  replaysSessionSampleRate: 0.05,
+  replaysOnErrorSampleRate: 1.0,
 });
+
+const sentryCreateBrowserRouter = Sentry.wrapCreateBrowserRouter(createBrowserRouter);
+const router = sentryCreateBrowserRouter([
+  {
+    path: '*',
+    element: (
+      <Sentry.ErrorBoundary fallback={<p>Something went wrong. The error has been reported.</p>} showDialog>
+        <App />
+      </Sentry.ErrorBoundary>
+    ),
+  },
+]);
 
 document.addEventListener('mousemove', e => {
   document.documentElement.style.setProperty('--cx', e.clientX + 'px')
@@ -22,7 +43,7 @@ document.addEventListener('mousemove', e => {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <InitErrorBoundary>
-      <App />
+      <RouterProvider router={router} />
     </InitErrorBoundary>
   </React.StrictMode>
 );

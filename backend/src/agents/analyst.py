@@ -11,6 +11,7 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
+import sentry_sdk
 from src.agents.state import ProjectState
 from appwrite.id import ID
 from src.appwrite_client import databases
@@ -26,6 +27,8 @@ async def analyst(state: ProjectState) -> dict:
     try:
         return await _analyst_impl(state)
     except Exception as e:
+        sentry_sdk.set_tag("agent", "analyst")
+        sentry_sdk.capture_exception(e)
         log.error(f"analyst CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "analyst", "error": f"Unexpected: {e}"})
         return {"errors": [f"analyst: {type(e).__name__}: {e}"]}
@@ -55,6 +58,8 @@ async def _analyst_impl(state: ProjectState) -> dict:
         })
         agent_run_id = doc["$id"]
     except Exception as e:
+        sentry_sdk.set_tag("agent", "analyst")
+        sentry_sdk.capture_exception(e)
         log.warning(f"Failed to create agent-run doc: {e}")
 
     # Step 3: load analyst.txt, fill {raw_text} placeholder
@@ -107,6 +112,8 @@ async def _analyst_impl(state: ProjectState) -> dict:
                     pass
             return {"errors": ["analyst: LLM timed out"]}
         except Exception as e:
+            sentry_sdk.set_tag("agent", "analyst")
+            sentry_sdk.capture_exception(e)
             publish(job_id, "agent_failed", {
                 "agent": "analyst", "error": str(e), "retry_count": attempt,
             })
@@ -192,6 +199,8 @@ async def _analyst_impl(state: ProjectState) -> dict:
                 "outputSummary": f"Found {len(mvp_features)} features, domain: {domain}",
             })
         except Exception as e:
+            sentry_sdk.set_tag("agent", "analyst")
+            sentry_sdk.capture_exception(e)
             log.warning(f"Failed to update agent-run doc: {e}")
 
     publish(job_id, "agent_done", {

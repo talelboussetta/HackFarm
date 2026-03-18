@@ -10,6 +10,7 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
+import sentry_sdk
 from src.agents.state import ProjectState
 from appwrite.id import ID
 from src.appwrite_client import databases
@@ -25,6 +26,8 @@ async def backend_agent(state: ProjectState) -> dict:
     try:
         return await _backend_agent_impl(state)
     except Exception as e:
+        sentry_sdk.set_tag("agent", "backend_agent")
+        sentry_sdk.capture_exception(e)
         log.error(f"backend_agent CRASHED: {type(e).__name__}: {e}", exc_info=True)
         publish(job_id, "agent_failed", {"agent": "backend_agent", "error": f"Unexpected: {e}"})
         return {"errors": [f"backend_agent: {type(e).__name__}: {e}"]}
@@ -61,6 +64,8 @@ async def _backend_agent_impl(state: ProjectState) -> dict:
         })
         agent_run_id = doc["$id"]
     except Exception as e:
+        sentry_sdk.set_tag("agent", "backend_agent")
+        sentry_sdk.capture_exception(e)
         log.warning(f"Failed to create agent-run doc: {e}")
 
     # Step 3: load prompt and fill placeholders
@@ -133,6 +138,8 @@ async def _backend_agent_impl(state: ProjectState) -> dict:
                     pass
             return {"errors": ["backend_agent: LLM timed out"]}
         except Exception as e:
+            sentry_sdk.set_tag("agent", "backend_agent")
+            sentry_sdk.capture_exception(e)
             publish(job_id, "agent_failed", {
                 "agent": "backend_agent", "error": str(e), "retry_count": attempt,
             })
@@ -213,6 +220,8 @@ async def _backend_agent_impl(state: ProjectState) -> dict:
                 "outputSummary": f"Generated {file_count} files, {endpoint_count_final} endpoints",
             })
         except Exception as e:
+            sentry_sdk.set_tag("agent", "backend_agent")
+            sentry_sdk.capture_exception(e)
             log.warning(f"Failed to update agent-run doc: {e}")
 
     publish(job_id, "agent_done", {
