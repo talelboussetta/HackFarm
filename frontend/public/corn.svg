@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="HackFarmer corn logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#101828" />
+      <stop offset="100%" stop-color="#1f2937" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)" />
+  <path d="M21 42c0-6 3-11 11-20 8 9 11 14 11 20 0 6-5 11-11 11s-11-5-11-11z" fill="#facc15" />
+  <path d="M23 43c-4 0-8 3-9 7 6 1 11-1 14-5-1-1-3-2-5-2z" fill="#22c55e" />
+  <path d="M41 43c-2 0-4 1-5 2 3 4 8 6 14 5-1-4-5-7-9-7z" fill="#16a34a" />
+  <g fill="#fde68a">
+    <circle cx="28" cy="29" r="1.5" />
+    <circle cx="32" cy="27" r="1.5" />
+    <circle cx="36" cy="29" r="1.5" />
+    <circle cx="30" cy="33" r="1.5" />
+    <circle cx="34" cy="33" r="1.5" />
+    <circle cx="28" cy="37" r="1.5" />
+    <circle cx="32" cy="37" r="1.5" />
+    <circle cx="36" cy="37" r="1.5" />
+    <circle cx="30" cy="41" r="1.5" />
+    <circle cx="34" cy="41" r="1.5" />
+  </g>
+</svg>
