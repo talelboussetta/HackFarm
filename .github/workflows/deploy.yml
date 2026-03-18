@@ -80,5 +80,6 @@ jobs:
         run: |
           npm install -g appwrite-cli
           appwrite client --endpoint ${{ secrets.APPWRITE_ENDPOINT }} --project-id ${{ secrets.APPWRITE_PROJECT_ID }} --key ${{ secrets.APPWRITE_API_KEY }}
-          appwrite sites create-deployment --site-id ${{ secrets.APPWRITE_SITE_ID }} --code dist --activate true
+          tar -czf dist.tar.gz -C dist .
+          appwrite sites create-deployment --site-id ${{ secrets.APPWRITE_SITE_ID }} --code ./dist.tar.gz --activate true
 
