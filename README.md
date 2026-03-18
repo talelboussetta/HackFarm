@@ -111,6 +111,30 @@ docker-compose up
 | POST | `/api/jobs/{id}/refine` | Refine existing project |
 | DELETE | `/api/jobs/{id}` | Cancel/delete job |
 
+## Security & Operations
+
+- Provider API keys are configured per user in **Settings** and encrypted server-side using Fernet.
+- Authentication and user-scoped data access are managed through Appwrite.
+- Job progress is streamed in real time, with retry-aware validation in the orchestration loop.
+- Production deployment is supported via `docker-compose.prod.yml` and CI/CD workflow automation.
+
+## Repository Layout
+
+```text
+HackFarm/
+├─ frontend/   # React + Vite dashboard and generation UI
+├─ backend/    # FastAPI services, agents, and orchestration
+├─ docs/       # Architecture diagrams and technical documentation
+└─ images/     # Visual assets and branding
+```
+
+## Roadmap Snapshot
+
+- Expanded agent specialization and quality scoring
+- Stronger eval/benchmark coverage for generated projects
+- More provider presets and model routing controls
+- Team collaboration and shared project workspaces
+
 ## Contributing
 
 1. Fork the repository
