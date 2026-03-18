@@ -38,6 +38,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Heroku CLI
+        run: curl https://cli-assets.heroku.com/install.sh | sh
+
       - name: Set Heroku config vars
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
@@ -76,6 +79,6 @@ jobs:
         working-directory: frontend
         run: |
           npm install -g appwrite-cli
-          appwrite login --endpoint ${{ secrets.APPWRITE_ENDPOINT }} --project ${{ secrets.APPWRITE_PROJECT_ID }} --key ${{ secrets.APPWRITE_API_KEY }}
-          appwrite deploy site --siteId ${{ secrets.APPWRITE_SITE_ID }} --path dist/
+          appwrite client --endpoint ${{ secrets.APPWRITE_ENDPOINT }} --project-id ${{ secrets.APPWRITE_PROJECT_ID }} --key ${{ secrets.APPWRITE_API_KEY }}
+          appwrite sites create-deployment --site-id ${{ secrets.APPWRITE_SITE_ID }} --code dist --activate true
 
