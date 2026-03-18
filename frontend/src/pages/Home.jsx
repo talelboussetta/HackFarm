@@ -146,6 +146,20 @@ export default function Home() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (!user) return
+    const reminderKey = 'hackfarm_api_keys_notice_shown'
+    if (sessionStorage.getItem(reminderKey)) return
+    sessionStorage.setItem(reminderKey, '1')
+    toast('make sure to plug in your api keys (Groq required)', {
+      duration: 5000,
+      action: {
+        label: 'Settings',
+        onClick: () => navigate('/settings'),
+      },
+    })
+  }, [user, navigate])
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
       'application/pdf': ['.pdf'],
