@@ -79,7 +79,7 @@ jobs:
         working-directory: frontend
         run: |
           npm install -g appwrite-cli
-          appwrite client --endpoint "${{ secrets.APPWRITE_ENDPOINT }}" --project "${{ secrets.APPWRITE_PROJECT_ID }}" --key "${{ secrets.APPWRITE_API_KEY }}"
+            appwrite login --endpoint "${{ secrets.APPWRITE_ENDPOINT }}" --projectId "${{ secrets.APPWRITE_PROJECT_ID }}" --key "${{ secrets.APPWRITE_API_KEY }}"
           test -d dist
           tar -czf dist.tar.gz -C dist .
           appwrite sites create-deployment --site-id "${{ secrets.APPWRITE_SITE_ID }}" --code ./dist.tar.gz --activate true
