@@ -3,6 +3,7 @@ HackFarmer — FastAPI application.
 """
 
 import os
+from pathlib import Path
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
@@ -30,9 +31,10 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -116,6 +118,11 @@ app.state.appwrite_project_id = settings.APPWRITE_PROJECT_ID
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+DIST_PATH = Path(__file__).parent.parent.parent / "frontend" / "dist"
+log.info(f"DIST_PATH resolved to: {DIST_PATH}, exists: {DIST_PATH.exists()}")
+if DIST_PATH.exists():
+    app.mount("/assets", StaticFiles(directory=DIST_PATH / "assets"), name="assets")
+
 # ── CORS ──────────────────────────────────────────────────────
 ALLOWED_ORIGINS = [o.strip() for o in settings.FRONTEND_URL.split(",") if o.strip()]
 if not ALLOWED_ORIGINS:
@@ -188,7 +195,7 @@ app.include_router(admin_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "ok", "environment": settings.ENVIRONMENT}
 
 
 @app.get("/internal/health")
@@ -199,3 +206,12 @@ async def internal_health():
 @app.get("/api/debug/sentry-test")
 async def sentry_test(_admin: dict = Depends(require_admin)):
     raise ValueError("Sentry test from HackFarmer backend")
+
+
+@app.get("/{full_path:path}")
+async def spa_handler(full_path: str):
+    if full_path.startswith(("api/", "auth/", "health")):
+        raise HTTPException(status_code=404)
+    if not DIST_PATH.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(DIST_PATH / "index.html")
