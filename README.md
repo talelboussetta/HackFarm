@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <img src="frontend/public/corn.svg" width="84" alt="HackFarmer corn logo" />
+</p>
+
+<p align="center">
   <a href="https://github.com/talelboussetta/HackFarm/actions/workflows/deploy.yml"><img src="https://github.com/talelboussetta/HackFarm/actions/workflows/deploy.yml/badge.svg" alt="Deploy" /></a>
   <img src="https://img.shields.io/badge/status-beta-f59e0b" alt="Status: Beta" />
   <img src="https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white" alt="Python 3.11" />
@@ -41,6 +45,10 @@ graph TD
     H -->|score >= 70 or retries >= 3| I[GitHub Agent]
     H -->|score < 70 and retries < 3| G
 ```
+
+Production architecture overview:
+
+![HackFarmer Full System Architecture](docs/hackfarmer-system-architecture.png)
 
 ## Tech Stack
 
