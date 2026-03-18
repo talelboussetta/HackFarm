@@ -19,7 +19,7 @@ backend/.venv/
 
 # Environment files
 .env
-frontend/.env.local
+frontend/.env.production
 backend/.env
 
 # Node
