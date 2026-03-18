@@ -5,7 +5,7 @@
 
 const BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
-  "https://hackfarmer-api-2ad66da2dadb.herokuapp.com"
+  "https://hackfarmer-api-068ef9cd2e06.herokuapp.com"
 ).replace(/\/$/, "");
 
 export async function api(path, options = {}, jwt = null) {
