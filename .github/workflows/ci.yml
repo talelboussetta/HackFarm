@@ -1,8 +1,10 @@
-name: Deploy HackFarmer
+name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
 
 jobs:
   backend-lint:
@@ -38,29 +40,3 @@ jobs:
         run: npm run build
       - name: Verify dist
         run: test -d frontend/dist && echo "dist OK" || (echo "dist MISSING" && exit 1)
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: [backend-lint, frontend-build]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Deploy to Heroku
-        uses: akhileshns/heroku-deploy@v3.13.15
-        with:
-          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
-          heroku_email: ${{ secrets.HEROKU_EMAIL }}
-          appdir: backend
-          procfile_exists: true
-      - name: Health check
-        run: |
-          sleep 20
-          curl -f https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health \
-            -H "Accept: application/json" \
-            --retry 3 --retry-delay 5 \
-            || (echo "Health check failed after deploy" && exit 1)
-          echo "Deploy healthy"
-      - name: Release URL
-        run: echo "Deployed: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"

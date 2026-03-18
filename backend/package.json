@@ -1,0 +1,6 @@
+{
+  "name": "hackfarmer-backend",
+  "version": "1.0.0",
+  "engines": { "node": "20.x" },
+  "scripts": { "build": "echo no-op" }
+}

@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { Upload, MessageSquare, Zap, X, Github, Lock, Globe, AlertTriangle, Loader2, BarChart3, CheckCircle2, XCircle, Clock, Sparkles, LayoutTemplate } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useJobSubmit } from '../hooks/useJobSubmit'
+import { api } from '../lib/api'
 import Button from '../components/Button'
 import Lottie from 'lottie-react'
 import submitAnim from '../animations/submit.json'
@@ -124,7 +125,7 @@ Sleek dark UI. Markdown rendering for outputs. Responsive design.`,
 
 export default function Home() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, getJWT } = useAuth()
   const { submit, loading, error: submitError } = useJobSubmit()
 
   const [tab, setTab] = useState('upload')
@@ -140,11 +141,12 @@ export default function Home() {
 
   // Fetch user stats for dashboard
   useEffect(() => {
-    fetch('/api/jobs-stats', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
+    if (!user) return
+    getJWT()
+      .then(jwt => jwt ? api('/api/jobs-stats', {}, jwt) : null)
       .then(data => data && setStats(data))
       .catch(() => {})
-  }, [])
+  }, [user, getJWT])
 
   useEffect(() => {
     if (!user) return
