@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import * as Sentry from '@sentry/react';
 import App from './App';
+import InitErrorBoundary from './components/InitErrorBoundary';
 import './index.css';
 
 // ── Sentry error monitoring ──────────────────────────────────
@@ -20,6 +21,8 @@ document.addEventListener('mousemove', e => {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <InitErrorBoundary>
+      <App />
+    </InitErrorBoundary>
   </React.StrictMode>
 );
