@@ -60,17 +60,16 @@ This document outlines the steps to configure Heroku, Appwrite, and Sentry for t
 
 ## 4. Deployment
 
-1.  Push your changes to `main`.
-2.  Watch the Action in the **Actions** tab.
-3.  Once deployed, check Heroku logs (`More` > `View logs`) to ensure the backend connected to Appwrite successfully.
+1.  **Commit & Push:** Push your changes to the `main` branch.
+2.  **Monitor Action:** Go to the **Actions** tab in your GitHub repository and watch the "Deploy HackFarmer" workflow.
+    *   It will install dependencies, lint the backend, build the frontend, and deploy everything to Heroku.
+    *   The deployment step now uses a robust `git push --force` method to ensure your latest code is always live, overwriting any history mismatches.
+3.  **Verify:** Once the action completes successfully (green checkmark), your app is live.
+4.  **Check Logs:** If needed, check the Heroku logs (`heroku logs --tail -a <your-app-name>`) to verify the backend started correctly and connected to Appwrite.
 
-## 5. Deployment
+## 5. Storage (Buckets)
 
-1.  Push your changes to the `main` branch.
-2.  The GitHub Action `deploy.yml` will:
-    *   Lint the backend.
-    *   Build the frontend (injecting the Appwrite Project ID and Sentry DSN).
-    *   Copy the frontend build to the backend folder.
-    *   Deploy the backend to Heroku.
-    *   Run the Appwrite setup script on Heroku.
-3.  Once finished, your app should be live at `https://hackfarmer-app.herokuapp.com`.
+1.  **Create Bucket:** In Appwrite Console > Storage, create a bucket named `Generated ZIPs` (or similar).
+2.  **Bucket ID:** Copy the Bucket ID.
+3.  **Config:** If the ID is NOT `generated-zips`, update the `APPWRITE_ZIP_BUCKET_ID` Config Var in Heroku settings to match your new Bucket ID.
+    *   *Default in code is `generated-zips`.*
