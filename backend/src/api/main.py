@@ -118,6 +118,12 @@ app.state.appwrite_project_id = settings.APPWRITE_PROJECT_ID
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "environment": settings.ENVIRONMENT}
+
+
 DIST_PATH = Path(__file__).parent.parent.parent / "frontend" / "dist"
 log.info(f"DIST_PATH resolved to: {DIST_PATH}, exists: {DIST_PATH.exists()}")
 if DIST_PATH.exists():
@@ -193,9 +199,7 @@ app.include_router(downloads_router, prefix="/api/downloads", tags=["downloads"]
 app.include_router(admin_router)
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok", "environment": settings.ENVIRONMENT}
+# NOTE: /health is now defined at the top of the file to ensure priority
 
 
 @app.get("/internal/health")
@@ -210,7 +214,8 @@ async def sentry_test(_admin: dict = Depends(require_admin)):
 
 @app.get("/{full_path:path}")
 async def spa_handler(full_path: str):
-    if full_path.startswith(("api/", "auth/", "health")):
+    # Exclude API routes and internal endpoints from SPA fallback
+    if full_path.startswith(("api/", "auth/", "internal/")):
         raise HTTPException(status_code=404)
     if not DIST_PATH.exists():
         raise HTTPException(status_code=404)
