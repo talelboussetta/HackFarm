@@ -1,5 +1,11 @@
 from datetime import datetime, timezone
-import asyncio, base64, io, json, logging, re, zipfile
+import asyncio
+import base64
+import io
+import json
+import logging
+import re
+import zipfile
 import httpx
 import sentry_sdk
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
@@ -73,7 +79,7 @@ async def create_job(
         raise HTTPException(400, "Repo name too long (max 100 characters)")
 
     # Validation 3: user must have at least one valid API key
-    providers = _require_groq_provider(user["id"])
+    _require_groq_provider(user["id"])
 
     # Validation 3b: daily job limit (10 jobs/day per user)
     DAILY_JOB_LIMIT = 10

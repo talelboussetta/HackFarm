@@ -1,7 +1,8 @@
 from appwrite.query import Query
 from src.appwrite_client import databases
 from src.core.config import settings
-import asyncio, logging
+import asyncio
+import logging
 
 _semaphore = None  # initialized lazily to avoid event loop issues
 

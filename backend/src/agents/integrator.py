@@ -7,7 +7,6 @@ and checks import consistency. Never overwrites existing generated files.
 import ast
 import json
 import logging
-import re
 import asyncio
 from datetime import datetime, timezone
 
@@ -188,8 +187,7 @@ def _build_env_example(api_contracts: dict) -> str:
 
 
 def _build_docker_compose(tech_stack: dict) -> str:
-    be = tech_stack.get("backend", "FastAPI").lower()
-    return f"""version: "3.8"
+    return """version: "3.8"
 services:
   backend:
     build: ./backend

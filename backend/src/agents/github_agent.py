@@ -6,7 +6,6 @@ uploads ZIP to Appwrite Storage, and emits job_complete.
 
 import logging
 from datetime import datetime, timezone
-from io import BytesIO
 
 from appwrite.input_file import InputFile
 from appwrite.id import ID
@@ -104,7 +103,7 @@ async def _github_agent_impl(state: ProjectState) -> dict:
 
     publish(job_id, "agent_thinking", {
         "agent": "github_agent",
-        "message": f"Retrieved GitHub token for user, creating repo...",
+        "message": "Retrieved GitHub token for user, creating repo...",
     })
 
     client = GitHubClient(token, username)
