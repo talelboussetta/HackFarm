@@ -65,13 +65,24 @@ jobs:
           EOF
           
           # Add backend files that were just generated (frontend/dist)
-          git add -f backend/frontend/dist
-          git commit -m "Deploy: add frontend build artifacts" || echo "Nothing to commit"
+          if [ -d "backend/frontend/dist" ]; then
+            git add -f backend/frontend/dist
+            git commit -m "Deploy: add frontend build artifacts" || echo "Nothing to commit"
+          else
+            echo "Warning: backend/frontend/dist not found"
+          fi
           
           # Push only the backend subtree to Heroku main
           # We use --force because every subtree split creates a new history
           # We use HEAD as source to include the frontend build artifacts commit we just made
-          git push https://heroku:$HEROKU_API_KEY@git.heroku.com/$HEROKU_APP_NAME.git `git subtree split --prefix backend HEAD`:refs/heads/main --force
+          
+          echo "Splitting subtree..."
+          SPLIT_SHA=$(git subtree split --prefix backend HEAD)
+          echo "Split SHA: $SPLIT_SHA"
+          
+          echo "Pushing to Heroku..."
+          # Authentication is handled by .netrc created above
+          git push https://git.heroku.com/$HEROKU_APP_NAME.git $SPLIT_SHA:refs/heads/main --force
       - name: Heroku logs on failure
         if: failure()
         env:
