@@ -82,7 +82,7 @@ jobs:
           
           echo "Pushing to Heroku..."
           # Authentication is handled by .netrc created above
-          git push https://git.heroku.com/$HEROKU_APP_NAME.git $SPLIT_SHA:refs/heads/main --force
+          git push "https://git.heroku.com/${HEROKU_APP_NAME}.git" $SPLIT_SHA:refs/heads/main --force
       - name: Heroku logs on failure
         if: failure()
         env:
