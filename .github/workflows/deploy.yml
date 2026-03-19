@@ -67,4 +67,5 @@ jobs:
             || (echo "Health check failed after deploy" && exit 1)
           echo "Deploy healthy"
       - name: Release URL
-        run: echo "Deployed: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"
+        run: |
+          echo "Deployed: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"
