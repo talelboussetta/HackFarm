@@ -72,7 +72,16 @@ jobs:
           # We use --force because every subtree split creates a new history
           # We use HEAD as source to include the frontend build artifacts commit we just made
           git push https://heroku:$HEROKU_API_KEY@git.heroku.com/$HEROKU_APP_NAME.git `git subtree split --prefix backend HEAD`:refs/heads/main --force
+      - name: Heroku logs on failure
+        if: failure()
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+        run: |
+          npm install -g heroku
+          heroku logs --app $HEROKU_APP_NAME --num 100
       - name: Health check
+        if: success()
         run: |
           sleep 20
           curl -f https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health \
