@@ -82,6 +82,8 @@ jobs:
           
           echo "Pushing to Heroku..."
           # Authentication is handled by .netrc created above
+          # Strip hidden whitespaces/newlines from the app name which causes git url errors
+          HEROKU_APP_NAME=$(echo "$HEROKU_APP_NAME" | tr -d '\n' | tr -d '\r')
           git push "https://git.heroku.com/${HEROKU_APP_NAME}.git" $SPLIT_SHA:refs/heads/main --force
       - name: Heroku logs on failure
         if: failure()
