@@ -6,10 +6,9 @@ Streams the generated ZIP from Appwrite Storage.
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
 
 from src.api.dependencies import get_current_user
-from src.appwrite_client import databases, storage
+from src.appwrite_client import databases
 from src.core.config import settings
 
 router = APIRouter()

@@ -5,7 +5,6 @@ Checks syntax, imports, and endpoint consistency.
 """
 
 import ast
-import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -222,7 +221,7 @@ async def _validator_impl(state: ProjectState) -> dict:
     all_issues.extend(jsx_issues)
     publish(job_id, "agent_thinking", {
         "agent": "validator",
-        "message": f"⚠️ JSX import issues: {len(jsx_issues)}" if jsx_issues else f"✓ All JSX imports resolve correctly",
+        "message": f"⚠️ JSX import issues: {len(jsx_issues)}" if jsx_issues else "✓ All JSX imports resolve correctly",
     })
 
     # Check 4: API endpoint consistency

@@ -3,12 +3,36 @@ HackFarmer — FastAPI application.
 """
 
 import os
+import asyncio
+import logging
+import time
+import uuid
 from pathlib import Path
+from contextlib import asynccontextmanager
+
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
+
+from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from src.core.config import settings
+from src.core.queue_manager import start_queue_poller
+from src.appwrite_client import databases
+
+from src.api.routes.auth import router as auth_router
+from src.api.routes.jobs import router as jobs_router
+from src.api.routes.stream import router as stream_router
+from src.api.routes.settings import router as settings_router
+from src.api.routes.downloads import router as downloads_router
+from src.api.routes.admin import router as admin_router, require_admin
 
 sentry_sdk.init(
     dsn=settings.SENTRY_DSN or "",
@@ -24,30 +48,6 @@ sentry_sdk.init(
     send_default_pii=False,
     before_send=lambda event, hint: None if settings.ENVIRONMENT == "development" else event,
 )
-
-import asyncio
-import logging
-import time
-import uuid
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, Request, Depends, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-
-from src.core.queue_manager import start_queue_poller
-from src.appwrite_client import databases
-
-from src.api.routes.auth import router as auth_router
-from src.api.routes.jobs import router as jobs_router
-from src.api.routes.stream import router as stream_router
-from src.api.routes.settings import router as settings_router
-from src.api.routes.downloads import router as downloads_router
-from src.api.routes.admin import router as admin_router, require_admin
 
 # ── Logging ───────────────────────────────────────────────────
 LOG_FORMAT = '%(asctime)s %(levelname)s [%(name)s] %(message)s'
